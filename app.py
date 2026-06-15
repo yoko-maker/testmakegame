@@ -90,9 +90,8 @@ game_pages = [
 # （各ゲーム、とくに404のARG用サイドバーに portal の表示が混ざるのを防ぐ）
 nav = st.navigation([home_page] + game_pages, position="hidden")
 
-# 通常ゲームにだけ、控えめな「ポータルに戻る」をサイドバー上部へ。
-# 404 は没入感を保つため、portal 由来の要素を一切足さない。
-RETURN_URLS = {"arcade", "echo", "case001", "last30"}
+# 各ゲームのサイドバー上部に、控えめな「ポータルに戻る」を出す。
+RETURN_URLS = {"arcade", "echo", "case001", "last30", "arg"}
 if getattr(nav, "url_path", "") in RETURN_URLS:
     with st.sidebar:
         if st.button("🏠 ポータルに戻る", use_container_width=True):
