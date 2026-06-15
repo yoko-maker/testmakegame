@@ -50,6 +50,12 @@ GAMES = [
         "genre": "ARG・都市伝説ホラー",
         "desc": "「HELP」の一通から始まる失踪事件を追うARG。暗号・ミニゲーム・分岐エンド。",
     },
+    {
+        "path": "CoOp_PairLock/app.py", "title": "PAIR LOCK", "icon": "🔒", "url": "pairlock",
+        "genre": "2人協力・暗号脱出",
+        "desc": "「二人とも不完全」── 非対称情報を声で補い合う協力脱出。半分ずつの手がかりを"
+                "伝え合い、全5ステージを突破せよ。ルームコードで別端末から2人参加。",
+    },
 ]
 
 
@@ -91,7 +97,7 @@ game_pages = [
 nav = st.navigation([home_page] + game_pages, position="hidden")
 
 # 各ゲームのサイドバー上部に、控えめな「ポータルに戻る」を出す。
-RETURN_URLS = {"arcade", "echo", "case001", "last30", "arg"}
+RETURN_URLS = {"arcade", "echo", "case001", "last30", "arg", "pairlock"}
 if getattr(nav, "url_path", "") in RETURN_URLS:
     with st.sidebar:
         if st.button("🏠 ポータルに戻る", use_container_width=True):
