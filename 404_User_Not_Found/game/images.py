@@ -96,10 +96,12 @@ def make_hidden_image(secret: str, w=520, h=300, seed=404):
         # 瞳
         d.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=(0, g + 20, 0))
 
-    # 隠し文字: わずかに明るい緑で配置
+    # 隠し文字: ノイズ/ダミー文字とほぼ同じ暗さで、中央から少しずらして配置
     f_big = _font(54)
     bbox = d.textbbox((0, 0), secret, font=f_big)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    d.text(((w - tw) // 2, (h - th) // 2 - 8), secret,
-           fill=(0, 92, 0), font=f_big)
+    # 真ん中ピッタリだと目立つので、右下寄りにオフセット
+    px = (w - tw) // 2 + 70
+    py = (h - th) // 2 + 36
+    d.text((px, py), secret, fill=(0, 48, 0), font=f_big)
     return img

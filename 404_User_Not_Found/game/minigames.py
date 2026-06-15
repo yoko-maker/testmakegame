@@ -29,15 +29,16 @@ def _mark_solved(name: str):
 # シーザー暗号
 # ------------------------------------------------------------------
 def caesar_game() -> bool:
-    """暗号文 'ILQG DNLUD' (shift 3) を 'FIND AKIRA' に復号。"""
+    """暗号文 'DULND GQLI' (shift 3) を 'ARIKA DNIF' に復号し、
+    さらに鏡像（逆読み）にすると 'FIND AKIRA'。"""
     name = "caesar"
     answer = "FINDAKIRA"
-    cipher = "ILQG DNLUD"
+    cipher = "DULND GQLI"
 
     st.markdown("#### ▌シーザー暗号")
     st.write("メール本文の末尾に、ずらされた文字列が紛れている。")
     style.boxed(f"暗号文: <code>{cipher}</code>")
-    st.caption("ヒント: 各文字を逆方向に一定数ずらす。シフト量は 3。")
+    st.caption("ヒント: 文字をずらしても、まだ『鏡の中』だ。")
 
     if _is_solved(name):
         st.success("復号済み: FIND AKIRA")
@@ -111,7 +112,7 @@ def image_search_game() -> bool:
     st.markdown("#### ▌画像探索")
     st.write("ノイズ画像のどこかに隠し文字が埋め込まれている。読み取って入力せよ。")
     st.image(images.make_hidden_image(secret), caption="復元された添付画像 #2")
-    st.caption("ヒント: 画面の明るさを上げる / 目を細めると浮かび上がる。")
+    st.caption("ヒント: 目を細めて見ろ。")
 
     if _is_solved(name):
         st.success("隠し文字を発見: NULL")
@@ -139,7 +140,21 @@ def morse_game() -> bool:
              "ヘッドホンを着けて、耳を澄ませ——聞き取れるのは、信号だけではないかもしれない。")
     st.audio(audio.morse_to_wav_bytes(message), format="audio/wav")
     style.whisper("……たすけて……ここから だして……")
-    st.caption("※ 視覚的な補助はない。音だけが頼りだ。長音(—)と短音(・)を聞き分けよ。")
+
+    # 符号表は手元の資料として常備（耳で解読するための最低限の手がかり）
+    with st.expander("📖 モールス符号 早見表"):
+        letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        rows = [f"{ch} = {audio.MORSE[ch]}" for ch in letters]
+        cols = st.columns(4)
+        for i, row in enumerate(rows):
+            cols[i % 4].text(row)
+
+    # どうしても聞き取れない場合のフォールバック（任意）
+    with st.expander("🆘 信号が聞き取れない場合（受信ログを開く）"):
+        morse_str = audio.text_to_morse(message)
+        visual = morse_str.replace("-", "▬").replace(".", "・").replace(" / ", "  /  ")
+        st.caption("・=短音 / ▬=長音 / スペース=文字区切り / `/`=語区切り")
+        st.code(visual)
 
     if _is_solved(name):
         st.success("解読完了: SOS NULL")
@@ -170,7 +185,6 @@ def vigenere_game() -> bool:
     st.markdown("#### ▌ヴィジュネル暗号")
     st.write("Webログから抽出した暗号文。鍵はこれまでに何度も見た4文字。")
     style.boxed(f"暗号文: <code>{cipher}</code>")
-    st.caption("ヒント: 鍵は組織名 (画像探索で見つけたもの)。")
 
     if _is_solved(name):
         st.success("復号済み: THEY ARE WATCHING YOU")

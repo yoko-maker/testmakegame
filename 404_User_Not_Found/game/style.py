@@ -62,6 +62,35 @@ h1, h2, h3, h4 {
 
 p, li, label, .stMarkdown { color: #c8ffc0 !important; }
 
+/* サイドバー: 本体と同じ暗いターミナル調にして可読性を確保 */
+[data-testid="stSidebar"] {
+    background: #070c07 !important;
+    border-right: 1px solid var(--term-dim);
+}
+[data-testid="stSidebar"] * {
+    color: #d6ffce !important;
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4 {
+    color: var(--term-green) !important;
+    text-shadow: 0 0 6px rgba(57,255,20,0.6);
+}
+/* caption (session_state / 周回 など) を少し明るく */
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+[data-testid="stSidebar"] .stCaption {
+    color: #7ad36a !important;
+}
+/* 数値などの強調 (**...**) を鮮やかな緑に */
+[data-testid="stSidebar"] strong {
+    color: var(--term-green) !important;
+}
+/* 進行バーの色 */
+[data-testid="stSidebar"] [data-testid="stProgress"] div[role="progressbar"] > div {
+    background: var(--term-green) !important;
+}
+
 code, pre {
     background: #0a140a !important;
     color: var(--term-amber) !important;
