@@ -1,0 +1,194 @@
+"""ストーリー5ステージ + 隠しページ。"""
+
+import streamlit as st
+
+from . import audio, events, minigames, state, style
+
+
+def _advance_button(label: str, target: int):
+    st.divider()
+    if st.button(label, type="primary", use_container_width=True):
+        state.goto(target)
+        st.rerun()
+
+
+# ------------------------------------------------------------------
+# Stage 1 : メール解析
+# ------------------------------------------------------------------
+def stage1():
+    st.header("STAGE 1 — メール解析")
+    events.maybe_random_event()
+
+    st.markdown("深夜2時44分。閉じたはずの端末が、ひとりでに点灯する。"
+                "受信トレイに、送信日時の壊れた1通——あなた宛だ。")
+    style.boxed(
+        "<div class='email-head'>FROM : unknown@404.null<br>"
+        "TO &nbsp;&nbsp;: <span class='corrupt'>you (見つけた)</span><br>"
+        "SUBJECT : <b>HELP</b><br>"
+        "TIME : --:--:-- / 既読: あなたより前に、誰かが</div><br>"
+        "助けて。 ここがどこか分からない。 鏡の中みたいに、ぜんぶ反転してる。<br>"
+        "彼らはこれを消そうとする。 あなたが読んだ時点で、もう見られてる。 早く。<br><br>"
+        "ILQG DNLUD"
+    )
+
+    solved = minigames.caesar_game()
+    if solved:
+        state.set_flag("EMAIL")
+        st.info("メールに隠された名前を解読した。——AKIRA。その名前に、なぜか覚えがある気がする。")
+        _advance_button("▶ Stage 2 へ — 添付画像を解析する", 2)
+
+
+# ------------------------------------------------------------------
+# Stage 2 : 画像解析
+# ------------------------------------------------------------------
+def stage2():
+    st.header("STAGE 2 — 画像解析")
+    events.maybe_random_event()
+    st.markdown("メールには2枚の画像が添付されていた。どちらも破損・改竄され、"
+                "開くたびにノイズの形が変わる。見ているのか、見られているのか。")
+
+    tab1, tab2 = st.tabs(["添付 #1 : QRコード", "添付 #2 : ノイズ画像"])
+    with tab1:
+        qr_ok = minigames.qr_game()
+    with tab2:
+        img_ok = minigames.image_search_game()
+
+    if qr_ok and img_ok:
+        state.set_flag("IMAGE")
+        st.info("接続先コードと組織名らしき文字列『NULL』を入手した。")
+        _advance_button("▶ Stage 3 へ — 音声を解析する", 3)
+
+
+# ------------------------------------------------------------------
+# Stage 3 : 音声解析
+# ------------------------------------------------------------------
+def stage3():
+    st.header("STAGE 3 — 音声解析")
+    events.maybe_random_event()
+    st.markdown("QRから辿った先のサーバに、録音ファイルが一つだけ。"
+                "ファイル名は、あなたのログイン名と同じだった。")
+
+    ok = minigames.morse_game()
+    if ok:
+        state.set_flag("AUDIO")
+        st.info("救難信号 SOS と発信元 NULL を受信。"
+                "——AKIRA はまだ生きている。生きて、いてほしい。")
+        _advance_button("▶ Stage 4 へ — Webログを解析する", 4)
+
+
+# ------------------------------------------------------------------
+# Stage 4 : Webログ解析
+# ------------------------------------------------------------------
+def stage4():
+    st.header("STAGE 4 — Webログ解析")
+    events.maybe_random_event()
+    st.markdown("発信元サーバのアクセスログを入手。最終行のアクセス元IPは——"
+                "あなたのものだった。まだ一度も、ここに繋いでいないのに。")
+
+    ok = minigames.vigenere_game()
+    if ok:
+        state.set_flag("WEBLOG")
+        st.info("警告文を復号した。『奴ら』は、最初からあなたを見ていた。")
+
+        st.caption(
+            "ログの片隅に、本来表示されないはずのパスが紛れている……"
+        )
+        if st.button("🔒 /_void/ にアクセスする (隠しリンク)", key="hidden_link"):
+            state.set_flag("HIDDEN_PAGE")
+            state.goto(99)   # 隠しページ
+            st.rerun()
+
+        _advance_button("▶ Stage 5 へ — 真相を解明する", 5)
+
+
+# ------------------------------------------------------------------
+# 隠しページ : /_void/
+# ------------------------------------------------------------------
+def hidden_page():
+    st.header("/_void/ — ACCESS GRANTED")
+    style.jumpscare()
+    style.glitch_text("404 USER NOT FOUND")
+    st.audio(audio.dread_wav_bytes(), format="audio/wav")
+    st.markdown(
+        "ここは消されたユーザーたちの墓場。無数の『404』が、名前を奪われたまま並んでいる。<br>"
+        "スクロールしても、しても、終わらない。AKIRA もその一人だった。<br>"
+        "——そして、リストの一番下。まだ薄く点滅しているその名前を、あなたは知っている。",
+        unsafe_allow_html=True,
+    )
+    style.whisper(f"{st.session_state.player_name or 'あなた'} ……予約済み")
+    style.boxed(
+        "我々 <b>NULL</b> は実在しない。<br>"
+        "存在を消された者だけが、ここに辿り着ける。<br>"
+        "<b>NULL とは、消去された人間の集合体である。</b><br>"
+        "<span class='corrupt'>そして、ここを見たあなたも、もう半分こちら側だ。</span>"
+    )
+
+    if st.button("真実を記録する", key="record_truth"):
+        state.set_flag("ORG_IDENTITY")
+        state.add_clue("組織NULLの正体: 消去された人間たちの集合体")
+        st.success("組織の正体を記録した。[ORG_IDENTITY 取得]")
+
+    st.divider()
+    if st.button("◀ ログ解析に戻る", key="back_from_void"):
+        state.goto(4)
+        st.rerun()
+
+
+# ------------------------------------------------------------------
+# Stage 5 : 真相解明 (エンディング分岐)
+# ------------------------------------------------------------------
+def stage5():
+    st.header("STAGE 5 — 真相解明")
+    events.maybe_random_event()
+
+    st.markdown(
+        "全ての手がかりが一点を指している。AKIRA の居場所、そして組織 NULL。<br>"
+        "気づけば部屋の照明は落ち、画面の灯りだけが顔を照らしている。<br>"
+        "最後の選択が、この物語の——そして<b>あなたの</b>結末を決める。",
+        unsafe_allow_html=True,
+    )
+
+    # 第四の壁演出
+    if state.has_flag("WALL_BROKEN") or state.flag_count() >= 4:
+        events.fourth_wall(st.session_state.player_name)
+
+    st.subheader("どう行動する?")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("AKIRA を救出する", use_container_width=True):
+            _decide_ending()
+            st.rerun()
+        if st.button("組織 NULL の正体を暴く", use_container_width=True):
+            if state.has_flag("ORG_IDENTITY"):
+                state.game()["ending"] = "secret"
+            else:
+                st.warning("まだ組織の正体を掴んでいない。隠しページを探せ。")
+                return
+            state.goto(100)
+            st.rerun()
+    with c2:
+        if st.button("自分の名前で接続を試みる", use_container_width=True):
+            # ホラーEnd分岐
+            state.set_flag("WALL_BROKEN")
+            state.game()["ending"] = "horror"
+            state.goto(100)
+            st.rerun()
+        if st.button("全ての真実を統合する", use_container_width=True):
+            if state.all_flags():
+                state.game()["ending"] = "true"
+                state.goto(100)
+                st.rerun()
+            else:
+                missing = state.flag_count()
+                st.warning(f"フラグ不足 ({missing}/8)。"
+                           " 隠し要素を含む全てを回収する必要がある。")
+
+
+def _decide_ending():
+    """救出ルート: フラグ数で Normal / True を分岐。"""
+    if state.all_flags():
+        state.game()["ending"] = "true"
+    else:
+        state.game()["ending"] = "normal"
+    state.goto(100)
