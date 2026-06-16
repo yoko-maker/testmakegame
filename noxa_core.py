@@ -247,15 +247,6 @@ def _gather_intrusion(game_key):
     return lines
 
 
-def _intrusion_static(lines):
-    for text, color in lines:
-        st.markdown(
-            f"<div style='font-family:monospace;color:{color};font-size:0.82em;"
-            f"border-left:3px solid #c33;padding:2px 8px;margin:4px 0;"
-            f"background:rgba(120,20,20,0.08);'>{text}</div>",
-            unsafe_allow_html=True)
-
-
 def _intrusion_cinematic(lines):
     """画面暗転 → 一文字ずつ打ち込む演出（初回オープン時のみ）。
 
@@ -279,26 +270,27 @@ def _intrusion_cinematic(lines):
                         unsafe_allow_html=True)
             time.sleep(0.055)
         done += f"<div style='color:{color};margin:6px 0;'>{text}</div>"
-        time.sleep(0.5)
-    time.sleep(1.0)
+        time.sleep(0.6)
+    # 全文が出そろってから、しばらく読ませてから消す
+    time.sleep(3.0)
     ph.empty()
 
 
 def render_intrusion(game_key):
     """各ゲーム冒頭で呼ぶ。作品間干渉(⑦)と赤い女の侵食(⑥)を描く。
 
-    初回オープン時は「暗転→一文字ずつ表示」の演出、以降のリランでは静的表示。
-    ポータル未統合・Streamlit未接続でも安全（no-op）。
+    初回オープン時に「暗転→一文字ずつ表示」の演出を一度だけ再生し、消える。
+    以降は上部に何も残さない。ポータル未統合・Streamlit未接続でも安全（no-op）。
     """
     try:
+        shown_key = f"_intrusion_shown_{game_key}"
+        if st.session_state.get(shown_key):
+            return  # 既に演出済み。上部には何も残さない
         lines = _gather_intrusion(game_key)
         if not lines:
             return
-        shown_key = f"_intrusion_shown_{game_key}"
-        if not st.session_state.get(shown_key):
-            st.session_state[shown_key] = True
-            _intrusion_cinematic(lines)
-        _intrusion_static(lines)
+        st.session_state[shown_key] = True
+        _intrusion_cinematic(lines)
     except Exception:
         pass
 
