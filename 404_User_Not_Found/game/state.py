@@ -12,11 +12,13 @@ FLAGS = {
     "HIDDEN_PAGE": "隠しページ到達",
     "WALL_BROKEN": "第四の壁を越えた",
     "MORSE_SOS": "モールスでSOSを受信",
+    "NOXA_LOG": "NOXA内部ログ(404の裏側)に到達",   # 第二の隠しページ
 }
 
 # 全フラグ回収 (True End) に必要なフラグ
 TRUE_END_FLAGS = ["EMAIL", "IMAGE", "AUDIO", "WEBLOG",
-                  "ORG_IDENTITY", "HIDDEN_PAGE", "WALL_BROKEN", "MORSE_SOS"]
+                  "ORG_IDENTITY", "HIDDEN_PAGE", "WALL_BROKEN", "MORSE_SOS",
+                  "NOXA_LOG"]
 
 
 def _default_state():
@@ -38,6 +40,8 @@ def init():
         st.session_state.loops = 0          # 周回数
     if "player_name" not in st.session_state:
         st.session_state.player_name = ""
+    if "player_time" not in st.session_state:
+        st.session_state.player_time = ""   # 起動時刻 (第四の壁演出で使用)
     if "event_log" not in st.session_state:
         st.session_state.event_log = []
 

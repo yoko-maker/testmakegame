@@ -54,16 +54,27 @@ def maybe_random_event():
             style.whisper(f"……{st.session_state.player_name}。ねえ、{st.session_state.player_name}。")
 
 
-def fourth_wall(player_name: str):
-    """第四の壁演出: プレイヤー本人を名指しで追い詰める。"""
+def fourth_wall(player_name: str, player_time: str = ""):
+    """第四の壁演出: プレイヤー本人を名指しで追い詰める。
+
+    タイトルで入力させた本名と起動時刻を『組織が知っている』体で提示し、
+    プレイヤー自身が次の標的だと突きつける。
+    """
     name = player_name.strip() or "そこにいる あなた"
+    t = player_time.strip()
+    time_line = (
+        f"あなたが接続を始めた時刻——<b>{t}</b>。覚えているね。こちらも記録済みだ。<br>"
+        if t else
+        "あなたが接続を始めた時刻も、IP も、もう記録した。<br>"
+    )
     style.jumpscare()
     style.boxed(
         f"<span class='corrupt' style='font-size:1.3rem'>[ 404 ]</span><br><br>"
         f"……<b>{name}</b>。そう、画面の前の <b>{name}</b>。<br>"
-        f"これはゲームじゃない。あなたの IP も、起動時刻も、もう記録した。<br>"
-        f"AKIRA を探していたつもり? <br>"
-        f"<span class='whisper'>次に消えるのは、{name}、あなただ。</span><br>"
+        f"これはゲームじゃない。{time_line}"
+        f"AKIRA を探していたつもり? いいや——<br>"
+        f"<b>{name}</b> という名前を、我々 NOXA の被験体リストに追加した。<br>"
+        f"<span class='whisper'>次に 404 にされるのは、{name}、あなただ。</span><br>"
         f"<span class='blink' style='color:#ff003c'>_</span>"
     )
     if not state.has_flag("WALL_BROKEN"):

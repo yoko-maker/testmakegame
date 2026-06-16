@@ -78,6 +78,11 @@ def title_screen():
                   placeholder="本名を入れるほど、物語はあなたに近づく……")
     st.caption("※ この名前は物語の後半で牙を剥く。")
 
+    st.text_input("接続を開始した『現在の時刻』を入力 (例: 02:44)",
+                  key="player_time",
+                  placeholder="いま、あなたの時計が指している時刻……")
+    st.caption("※ 奴らは、あなたがいつ覗いたかも記録する。")
+
     if st.button("▶ 接続を開始する", type="primary", use_container_width=True):
         state.goto(1)
         st.rerun()
@@ -87,8 +92,9 @@ def title_screen():
             "- 全5ステージ: メール → 画像 → 音声 → Webログ → 真相\n"
             "- ミニゲーム: シーザー暗号 / QR復元 / 画像探索 / モールス / ヴィジュネル暗号\n"
             "- エンディングは4種 (Normal / Secret / Horror / True)\n"
-            "- 隠しページ・隠しイベント・第四の壁・周回プレイ要素あり\n"
-            "- 全8フラグ回収で **TRUE END**"
+            "- 失踪者 AKIRA の人格断片を各ステージで収集 (SNS / 音声 / メモ)\n"
+            "- 隠しページ2種・隠しイベント・第四の壁・周回プレイ要素あり\n"
+            f"- 全{len(state.TRUE_END_FLAGS)}フラグ回収で **TRUE END**"
         )
 
 
@@ -101,6 +107,7 @@ ROUTES = {
     3: stages.stage3,
     4: stages.stage4,
     5: stages.stage5,
+    98: stages.noxa_log_page,
     99: stages.hidden_page,
     100: endings.show,
 }

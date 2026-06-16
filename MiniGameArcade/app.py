@@ -10,6 +10,8 @@
   ❓ クイズ
   🎰 スロットマシン
   🔤 ハングマン
+  🛒 景品交換所
+  🔢 数列の記憶（隠しゲーム・コインで解放）
 """
 
 import random
@@ -34,10 +36,58 @@ ACHIEVEMENTS = {
     "jackpot": ("💰 ジャックポット", "スロットで3つ揃えた"),
     "word_master": ("🔤 言葉の達人", "ハングマンをクリア"),
     "rich": ("🤑 大富豪", "コインを500枚ためた"),
+    "listener": ("☕ 聞き上手", "マスターの身の上話を最後まで聞いた"),
+    "echo_seeker": ("📼 ECHOの残響", "隠しゲーム「数列の記憶」を解放した"),
 }
 
 STARTING_COINS = 100
 LEVEL_STEP = 100  # この枚数を稼ぐごとに1レベルアップ
+
+
+# --------------------------------------------------------------------------
+# 店主「マスター」— 累計獲得コインのしきい値で独白が段階解放される。
+# 真相は最後の段階で明かされる（元NOXA研究員／ECHO計画から逃げてきた）。
+# --------------------------------------------------------------------------
+MASTER_MONOLOGUES = [
+    (0,
+     "「いらっしゃい。ここは古い筐体ばかりの小さなアーケードさ。"
+     "わたしのことは“マスター”とでも呼んでくれ。ゆっくり遊んでいきな。」"),
+    (100,
+     "「ほう、もう100コインか。筋がいいね。"
+     "……この店を始める前は、別の仕事をしていてね。人にはあまり話さないが。」"),
+    (300,
+     "「むかし、わたしは“研究”の仕事をしていた。とある機構でね。"
+     "頭の良い連中ばかりだったが……みんな、少しずつ姿を消していった。」"),
+    (600,
+     "「ECHO（エコー）——そう呼ばれていた計画があった。"
+     "人の意識を、そっくり機械へ写し取ろうという試みさ。美しい夢に見えたんだがね。」"),
+    (1000,
+     "「気づけば同僚は名簿から消え、残ったのは番号だけ。"
+     "決まって“404”——どこにも見つからない、という意味の番号だった。怖くなってね。」"),
+    (1500,
+     "「だから逃げた。データを少しだけ抱えてね。"
+     "この古い筐体——実は中身は空っぽじゃない。あの計画の記録を隠す“擬装”なのさ。」"),
+    (2500,
+     "「わたしは“ノクサ研究機構”の元研究員だ。ECHOから逃げ出した臆病者さ。"
+     "だがここでなら、消えた仲間の記憶も、こうして遊ぶ誰かの笑顔も、まだ残せる。"
+     "……長話に付き合ってくれて、ありがとう。」"),
+]
+
+
+def master_unlocked_count():
+    """累計獲得コインで解放済みのマスター独白の本数。"""
+    earned = st.session_state.coins_earned + st.session_state.get("master_bonus_coins", 0)
+    return sum(1 for threshold, _ in MASTER_MONOLOGUES if earned >= threshold)
+
+
+# --------------------------------------------------------------------------
+# 景品交換所のカタログ
+# --------------------------------------------------------------------------
+SHOP_BADGES = {
+    "badge_cherry": ("🍒 チェリーピン", "スロット好きの証", 120),
+    "badge_seven": ("7️⃣ ラッキーセブン章", "幸運を呼ぶ収集バッジ", 250),
+    "badge_404": ("📟 “404”の欠片", "見つからないはずのバッジ。なぜここに？", 404),
+}
 
 
 def init_state(key, value):
@@ -53,6 +103,11 @@ def init_global_state():
     init_state("coins_earned", 0)  # 累計獲得コイン（レベルの素）
     init_state("achievements", set())
     init_state("clears", 0)  # 累計クリア回数
+    # マスター／景品交換所まわり
+    init_state("master_extra", False)       # 追加エピソード解放済みか
+    init_state("master_bonus_coins", 0)     # 独白解放を進めるための加算分
+    init_state("badges", set())             # 交換した収集バッジ
+    init_state("secret_unlocked", False)    # 隠しゲーム「数列の記憶」解放済みか
 
 
 def add_coins(amount):
@@ -93,11 +148,14 @@ def reward_banner(amount):
 # ==========================================================================
 def page_home():
     st.title("🎮 ミニゲームアーケード")
-    st.write("6つのゲームで遊んでコインを稼ぎ、レベルと実績を集めよう！")
+    st.write("ゲームで遊んでコインを稼ぎ、レベルと実績を集めよう！")
 
     name = st.text_input("プレイヤー名", value=st.session_state.player_name, max_chars=12)
     if name != st.session_state.player_name:
         st.session_state.player_name = name
+
+    st.markdown("---")
+    render_master()
 
     st.markdown("---")
     st.subheader(f"👤 {st.session_state.player_name} さんのプロフィール")
@@ -123,7 +181,207 @@ def page_home():
                 st.markdown(f"🔒 **???**\n\n_{desc}_")
 
     st.markdown("---")
-    st.caption("👈 サイドバーからゲームを選んで遊ぼう！")
+    st.caption("👈 サイドバーからゲームや景品交換所を選んで遊ぼう！")
+
+
+# --------------------------------------------------------------------------
+# 店主「マスター」の演出（ホーム画面）
+# --------------------------------------------------------------------------
+def render_master():
+    """累計獲得コインに応じてマスターの独白を段階表示する。"""
+    st.subheader("☕ アーケードの店主「マスター」")
+    count = master_unlocked_count()
+    total = len(MASTER_MONOLOGUES)
+    extra = st.session_state.master_extra
+
+    # 直近に解放された独白を一番上に大きく表示
+    latest_idx = count - 1
+    if latest_idx >= 0:
+        st.info(MASTER_MONOLOGUES[latest_idx][1])
+        # 最終段階まで聞いたら実績
+        if count >= total:
+            unlock("listener")
+
+    with st.expander(f"マスターの話を読み返す（{count} / {total} 解放済み）"):
+        for i, (threshold, line) in enumerate(MASTER_MONOLOGUES):
+            if i < count:
+                st.markdown(f"**◆ その{i + 1}**")
+                st.write(line)
+            else:
+                need = threshold - (st.session_state.coins_earned + st.session_state.master_bonus_coins)
+                st.markdown(f"🔒 _まだ聞けない話（累計あと {max(need, 0)} コイン）_")
+        if extra:
+            st.markdown("---")
+            st.markdown("**◆ 追加エピソード（景品交換所で解放）**")
+            st.write(
+                "「ひとつだけ白状しよう。逃げたあの夜、わたしは“404号”の端末から"
+                "ひとり分の意識データを持ち出した。それが誰のものだったか——"
+                "いつかこの筐体の奥で、もう一度あいさつできる日が来るといいんだがね。」"
+            )
+        else:
+            st.markdown("---")
+            st.caption("🔒 追加エピソードは「🛒 景品交換所」で解放できる。")
+
+
+# --------------------------------------------------------------------------
+# 景品交換所
+# --------------------------------------------------------------------------
+def page_shop():
+    st.header("🛒 景品交換所")
+    st.caption("貯めたコインで、マスターの追加エピソード・収集バッジ・隠しゲームと交換しよう。")
+    st.metric("💴 所持コイン", st.session_state.coins)
+    st.markdown("---")
+
+    # ① マスターの追加エピソード
+    st.subheader("📖 マスターの追加エピソード")
+    EXTRA_COST = 200
+    if st.session_state.master_extra:
+        st.success("解放済み。ホーム画面のマスターの話で読めるよ。")
+    else:
+        st.write(f"マスターが胸の内に隠した、もう一つの告白を解放する。（{EXTRA_COST} コイン）")
+        if st.button(f"交換する（-{EXTRA_COST}）", key="shop_extra",
+                     disabled=st.session_state.coins < EXTRA_COST):
+            add_coins(-EXTRA_COST)
+            st.session_state.master_extra = True
+            st.toast("マスターの追加エピソードを解放！", icon="📖")
+            st.rerun()
+
+    st.markdown("---")
+
+    # ② 収集バッジ
+    st.subheader("🎖️ レトロ収集バッジ")
+    for key, (name, desc, cost) in SHOP_BADGES.items():
+        owned = key in st.session_state.badges
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.markdown(f"**{name}** — {desc}")
+            st.caption(f"価格: {cost} コイン")
+        with c2:
+            if owned:
+                st.success("所持")
+            elif st.button(f"-{cost}", key=f"shop_{key}",
+                           disabled=st.session_state.coins < cost):
+                add_coins(-cost)
+                st.session_state.badges.add(key)
+                st.toast(f"{name} を手に入れた！", icon="🎖️")
+                if key == "badge_404":
+                    st.info("……端末がかすかに「404」と明滅した気がした。")
+                st.rerun()
+
+    if st.session_state.badges:
+        st.write("**コレクション:** " +
+                 "　".join(SHOP_BADGES[k][0] for k in SHOP_BADGES if k in st.session_state.badges))
+
+    st.markdown("---")
+
+    # ③ 隠しミニゲーム
+    st.subheader("🔢 隠しゲーム「数列の記憶」")
+    SECRET_COST = 300
+    if st.session_state.secret_unlocked:
+        st.success("解放済み。サイドバーのメニューから遊べるよ。")
+    else:
+        st.write(
+            f"古い筐体の奥に眠る7本目のゲーム。マスター曰く“ECHO計画の名残”だとか。"
+            f"（{SECRET_COST} コイン）"
+        )
+        if st.button(f"解放する（-{SECRET_COST}）", key="shop_secret",
+                     disabled=st.session_state.coins < SECRET_COST):
+            add_coins(-SECRET_COST)
+            st.session_state.secret_unlocked = True
+            unlock("echo_seeker")
+            st.toast("隠しゲーム「数列の記憶」を解放！", icon="🔢")
+            st.balloons()
+            st.rerun()
+
+
+# --------------------------------------------------------------------------
+# ゲーム7（隠し）: 数列の記憶
+# --------------------------------------------------------------------------
+SECRET_FLAVOR = [
+    "端末に古いログが流れる……「被験体の記憶列、再生開始」",
+    "画面の隅に小さく「NOXA / ECHO」のロゴが明滅する。",
+    "「この数列は、消えた研究者が遺した暗号だ」とマスターは言った。",
+    "ログの末尾はいつも同じ番号で途切れている——404。",
+]
+
+
+def setup_secret_round():
+    """新しい数列を生成して出題状態にする。"""
+    length = 3 + st.session_state.sm_level  # レベルが上がるほど長くなる
+    st.session_state.sm_sequence = [random.randint(0, 9) for _ in range(length)]
+    st.session_state.sm_input = ""
+    st.session_state.sm_phase = "show"   # show → input → result
+    st.session_state.sm_awarded = False
+
+
+def game_secret():
+    st.header("🔢 数列の記憶")
+    st.caption("表示された数列を覚えて、同じ順番で入力しよう。長く続けるほど高報酬！")
+    st.caption(f"📼 {random.choice(SECRET_FLAVOR)}")
+
+    init_state("sm_level", 0)
+    init_state("sm_best", 0)
+    if "sm_sequence" not in st.session_state:
+        setup_secret_round()
+
+    seq = st.session_state.sm_sequence
+    phase = st.session_state.sm_phase
+    st.metric("現在のレベル", st.session_state.sm_level + 1)
+
+    if phase == "show":
+        st.markdown(
+            f"<div style='font-size:48px; text-align:center; letter-spacing:14px;'>"
+            f"{' '.join(str(n) for n in seq)}</div>",
+            unsafe_allow_html=True,
+        )
+        st.info("この数列を覚えよう。覚えたら下のボタンへ。")
+        if st.button("覚えた！ 入力へ進む", key="sm_ready", use_container_width=True):
+            st.session_state.sm_phase = "input"
+            st.rerun()
+        return
+
+    if phase == "input":
+        st.markdown(
+            f"<div style='font-size:48px; text-align:center; letter-spacing:14px;'>"
+            f"{' '.join('＿' for _ in seq)}</div>",
+            unsafe_allow_html=True,
+        )
+        answer = st.text_input("覚えた数列を続けて入力（例: 0314）", key="sm_answer", max_chars=len(seq))
+        if st.button("回答する", key="sm_submit", use_container_width=True):
+            correct = "".join(str(n) for n in seq)
+            if answer == correct:
+                level = st.session_state.sm_level
+                reward = 10 + level * 8
+                add_coins(reward)
+                st.session_state.clears += 1
+                st.session_state.sm_reward = reward
+                st.session_state.sm_level += 1
+                st.session_state.sm_best = max(st.session_state.sm_best, st.session_state.sm_level)
+                st.session_state.sm_result = "win"
+            else:
+                st.session_state.sm_result = "lose"
+                st.session_state.sm_correct = correct
+                st.session_state.sm_level = 0
+            st.session_state.sm_phase = "result"
+            st.rerun()
+        return
+
+    # result
+    if st.session_state.get("sm_result") == "win":
+        st.success(f"🎉 正解！ +{st.session_state.get('sm_reward', 0)}コイン")
+        st.balloons()
+        st.write("マスター: 「いい記憶力だ。……あの計画も、こんな風に人を覚えていられたらよかった。」")
+        if st.button("次の数列へ（もっと長くなる）", key="sm_next", use_container_width=True):
+            setup_secret_round()
+            st.rerun()
+    else:
+        st.error(f"💀 不正解… 正解は「{st.session_state.get('sm_correct', '')}」でした。")
+        st.write("ログが途切れる——「…記憶列、損失。コード 404。」")
+        if st.button("もう一度はじめから", key="sm_retry", use_container_width=True):
+            setup_secret_round()
+            st.rerun()
+
+    st.metric("自己ベスト（到達レベル）", st.session_state.sm_best)
 
 
 # --------------------------------------------------------------------------
@@ -334,6 +592,9 @@ QUIZ = [
     {"q": "正五角形の内角の合計は？", "choices": ["360度", "540度", "720度", "900度"], "answer": 1},
     {"q": "サッカーで1チームの出場人数は？", "choices": ["9人", "10人", "11人", "12人"], "answer": 2},
     {"q": "日本の通貨単位は？", "choices": ["ウォン", "円", "元", "ドル"], "answer": 1},
+    {"q": "「echo」の日本語の意味は？", "choices": ["反響（こだま）", "稲妻", "潮流", "霧"], "answer": 0},
+    {"q": "マスターがこの店で何度も口にする“見つからない”を表す番号は？",
+     "choices": ["200", "404", "500", "302"], "answer": 1},
 ]
 
 
@@ -431,6 +692,14 @@ def game_slot():
     can_spin = st.session_state.coins >= SPIN_COST
     if st.button(f"🎯 スピン（-{SPIN_COST}コイン）", use_container_width=True, disabled=not can_spin):
         add_coins(-SPIN_COST)
+        # 極稀イースターエッグ: リールに「404」が浮かぶ
+        if random.random() < 0.01:
+            st.session_state.sl_reels = ["4️⃣", "0️⃣", "4️⃣"]
+            add_coins(40)
+            st.session_state.sl_message = (
+                "📟 リールに見覚えのない「404」が浮かんだ……マスターがこちらを見た。 +40コイン"
+            )
+            st.rerun()
         reels = [random.choice(SLOT_SYMBOLS) for _ in range(3)]
         st.session_state.sl_reels = reels
         if reels[0] == reels[1] == reels[2]:
@@ -468,6 +737,8 @@ HANGMAN_WORDS_EN = [
     ("GUITAR", "弦楽器"),
     ("RAINBOW", "雨上がりの空にかかる"),
     ("DIAMOND", "硬い宝石"),
+    ("ECHO", "マスターが逃げてきた“計画”の名"),
+    ("NOXA", "とある巨大研究機構の名"),
 ]
 HANGMAN_WORDS_JA = [
     ("すいか", "夏に食べる果物"),
@@ -481,6 +752,7 @@ HANGMAN_WORDS_JA = [
     ("みかん", "冬に食べる果物"),
     ("ゆき", "冬に降る白いもの"),
     ("くも", "空に浮かぶ白いもの"),
+    ("こだま", "山びこ。“ECHO”の日本語"),
 ]
 # 五十音キーボードの配列（空文字は空白セル）
 KANA_ROWS = [
@@ -593,7 +865,11 @@ PAGES = {
     "❓ クイズ": game_quiz,
     "🎰 スロットマシン": game_slot,
     "🔤 ハングマン": game_hangman,
+    "🛒 景品交換所": page_shop,
 }
+# 隠しゲームは景品交換所で解放したときだけメニューに現れる
+if st.session_state.secret_unlocked:
+    PAGES["🔢 数列の記憶（隠し）"] = game_secret
 
 st.sidebar.title("🎮 ミニゲームアーケード")
 st.sidebar.metric("💴 コイン", st.session_state.coins)

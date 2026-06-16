@@ -104,6 +104,12 @@ p, li, label, .stMarkdown { color: #c2dde3 !important; }
 }
 @keyframes pop { 0% { transform: scale(0.6); opacity:0;} 100%{transform:scale(1);opacity:1;} }
 .pl-half { color:#ff9f43; font-size:1.2rem; letter-spacing:0.3rem; }
+.pl-radio {
+    border-left: 3px solid #2fe6d6;
+    background: rgba(8,20,26,0.75);
+    font-size: 0.98rem; line-height: 1.5;
+}
+.pl-radio div { border-bottom: 1px dotted rgba(47,230,214,0.12); padding-bottom:0.3rem; }
 </style>
 """
 
@@ -118,6 +124,59 @@ def get_store():
 
 STAGE_NAMES = {1: "通信復旧", 2: "認証解除", 3: "監視室", 4: "研究データ解析", 5: "中央制御室"}
 LAST_STAGE = 5  # Final
+
+# --------------------------------------------------------------------------
+# 世界観 / 役割設定
+#   舞台: ノクサ研究機構 (NOXA Institute) の地下研究施設「PAIR LOCK」。
+#   P1 = 施設に取り残された研究者（端末α / 内側）
+#   P2 = 外部から無線で繋いだ救助オペレーター（端末β / 外側）
+#   非対称情報には必然がある: P1は施設内の現物を見られるが外部DBにアクセス
+#   できず、P2は救助本部のアーカイブを照会できるが現場を直接見られない。
+# --------------------------------------------------------------------------
+ROLE_DESC = {
+    "p1": ("施設内・研究者", "あなたは封鎖された地下施設の中にいる。目の前の装置・"
+           "監視映像・現物の記録は読めるが、外部データベースには繋がらない。"),
+    "p2": ("施設外・救助オペレーター", "あなたは地上の救助本部から無線で繋いでいる。"
+           "機構のアーカイブを照会できるが、現場の様子は相手の声でしか分からない。"),
+}
+
+# ステージ突破後に流す無線会話。事故の真相(Secret/True End)を小出しにする。
+# (話者ラベル, セリフ) のリスト。話者 "sys" は機械音声/ログ。
+RADIO_LOGS = {
+    1: [("P2", "通信、生きてる。よかった……まだそこにいるんだな。"),
+        ("P1", "ああ。だが扉が全部ロックされてる。中央制御まで一人じゃ進めない。"),
+        ("P2", "こっちで本部のアーカイブを照会する。お前は現場を、俺は記録を見る。"
+               "半分ずつだ。合わせれば抜けられる。"),
+        ("sys", "［復旧ログ］ 第3次プロジェクト『ECHO』関連区画 — 通信経路を一部再確立。")],
+    2: [("P1", "配線が古い規格だ。お前の手元の起動順、本当に合ってるのか?"),
+        ("P2", "アーカイブの施工図どおりだ。……ただ、最終更新がやけに古い。"
+               "この施設、表向きはとっくに閉鎖扱いになってるぞ。"),
+        ("P1", "閉鎖? 俺はつい先週まで普通に出勤してたんだが。"),
+        ("P2", "……記録上は、な。続けよう。")],
+    3: [("P2", "監視カメラ、本部にも一部ミラーされてる。だが——人影が映らない。"),
+        ("P1", "そりゃそうだ。この区画、俺以外もういない。みんな『移動になった』と聞いた。"),
+        ("P2", "移動先の記録が、どこにもないんだ。一人残らず。"),
+        ("sys", "［監視ログ 404］ 該当人員の現在位置: 参照先が見つかりません。")],
+    4: [("P1", "事故当夜の施錠者……この氏名、見覚えがある。"),
+        ("P2", "断片ログを繋いだか? ……もし二人分の半分が一つの単語になるなら、"
+               "それは本部が消したがってた裏ファイルのコードだ。"),
+        ("P1", "なあ。この施設、本当に俺たちを『出す』気があるのか?"),
+        ("P2", "わからん。だが今は、お前を外に出すことだけ考える。最後の扉だ。")],
+}
+
+# Final認証の物語的意味: 生成されるコードは「失踪した最終施錠者の名前(の符牒)」。
+# 解いた瞬間に、それが誰だったのかが回収される。
+
+
+def radio_label(spk: str, role: str) -> str:
+    """無線ログの話者ラベルを、見ている側視点('あなた'/'相手')で色付け。"""
+    if spk == "sys":
+        return "<span style='color:#6fb6c0'>［施設ログ］</span>"
+    me = "p1" if spk == "P1" else "p2"
+    you = (me == role)
+    cls = "pl-role-p1" if me == "p1" else "pl-role-p2"
+    who = "あなた" if you else "相手"
+    return f"<span class='{cls}'>{spk}・{who}</span>"
 
 
 def _new_room(seed: int) -> dict:
@@ -273,8 +332,12 @@ def build_puzzle(seed: int) -> dict:
     s3_grid = list(zip(chosen, cells, letters))  # P1: グリッド
 
     # --- Stage4 : ファイル復元 ---
+    # 氏名は「失踪した最終施錠者」。Finalで生成するコードはこの人物の符牒となる。
     names = ["天野", "桐生", "榊原", "志村", "早乙女", "鷹野", "九条", "氷室"]
     name = rng.choice(names)
+    yomi = {"天野": "AMANO", "桐生": "KIRYU", "榊原": "SAKAKI", "志村": "SHIMURA",
+            "早乙女": "SAOTOME", "鷹野": "TAKANO", "九条": "KUJO", "氷室": "HIMURO"}
+    name_roma = yomi[name]
     code4 = rng.randint(10, 99)
     s4_answer = f"{name}{code4}"
     # 隠しログ (True/Secret 条件)
@@ -283,16 +346,24 @@ def build_puzzle(seed: int) -> dict:
     s4_hid_p1, s4_hid_p2 = hid[:half], hid[half:]
 
     # --- Final : 統合 ---
+    # パズルの解(=入力する文字列)は既存どおり「語頭+認証記号+コード」で解ける。
+    # ただしこの3点は偶然ではなく、失踪した最終施錠者の『職員照合キー』そのもの。
+    # 解いた瞬間、画面が「①②③＝施錠者◯◯の照合キーだった」と回収する。
     final = f"{word[0]}{s3_answer}{code4}"
+    # 真相の符牒: 照合キーが指していたのは施錠者の名前。区画には ECHO の 404 を併記。
+    final_meaning = f"{name_roma[0]}{s3_answer}{code4}"  # 名のイニシャル文脈で対応
+    sector = 404
 
     return {
         "s1_symbols": s1_symbols, "s1_legend": s1_legend, "s1_answer": word,
         "s2_map": s2_map, "s2_order": s2_order, "s2_answer": s2_answer,
         "s3_grid": s3_grid, "s3_target": s3_target, "s3_answer": s3_answer,
         "s4_front_code": code4, "s4_back_name": name, "s4_answer": s4_answer,
+        "s4_name_roma": name_roma,
         "s4_hid_p1": s4_hid_p1, "s4_hid_p2": s4_hid_p2, "s4_hidword": hid,
         "final_word": word, "final_letter": s3_answer, "final_code4": code4,
-        "final_answer": final,
+        "final_answer": final, "final_meaning": final_meaning, "final_sector": sector,
+        "lock_name": name, "lock_name_roma": name_roma,
     }
 
 
@@ -309,7 +380,7 @@ def other(role: str) -> str:
 
 def role_tag(role: str) -> str:
     cls = "pl-role-p1" if role == "p1" else "pl-role-p2"
-    label = "P1 (端末α)" if role == "p1" else "P2 (端末β)"
+    label = "P1 (端末α・内側/研究者)" if role == "p1" else "P2 (端末β・外側/救助)"
     return f"<span class='{cls}'>{label}</span>"
 
 
@@ -398,6 +469,22 @@ def waiting_view(code: str, role: str, stage: int):
     stamp_bar(code, role, f"wait{stage}")
 
 
+def radio_interlude(role: str, after_stage: int):
+    """直前ステージ突破後の無線会話を表示（真相を小出しにする）。"""
+    log = RADIO_LOGS.get(after_stage)
+    if not log:
+        return
+    with st.expander(f"📻 無線記録 ─ STAGE {after_stage} 突破後", expanded=True):
+        st.caption("通信を再生中… 作業の合間に交わされた会話。")
+        lines = []
+        for spk, text in log:
+            lines.append(
+                f"<div style='margin:0.35rem 0'>{radio_label(spk, role)}"
+                f"<br><span style='opacity:0.92'>{text}</span></div>")
+        st.markdown(f"<div class='pl-panel pl-radio'>{''.join(lines)}</div>",
+                    unsafe_allow_html=True)
+
+
 def answer_block(code: str, role: str, stage: int, expected: str, label: str,
                  placeholder: str = ""):
     room = room_snapshot(code)
@@ -440,7 +527,8 @@ def render_grid_html(grid):
 
 def stage1(code, role, pz):
     st.subheader("STAGE 1 — 通信復旧  ★☆☆☆☆")
-    st.caption("記号列と対応表が、2台に分かれて表示されている。声で伝え合い、英単語を解読せよ。")
+    st.caption("封鎖直後。まず通信系を立ち上げる。記号列と対応表が内側・外側に"
+               "分かれて表示されている。声で伝え合い、復旧キーの英単語を解読せよ。")
     if role == "p1":
         st.markdown("**あなたの端末に届いた記号列:**")
         st.markdown(f"<div class='pl-panel'><div class='pl-cipher'>{pz['s1_symbols']}</div></div>",
@@ -540,6 +628,11 @@ def stage4(code, role, pz):
 def final_stage(code, role, pz):
     st.subheader("FINAL — 中央制御室  ★★★★★")
     st.caption("これまでの手がかりを統合し、最終認証コードを生成せよ。構成ルールも分割されている。")
+    st.markdown(
+        "<div class='pl-panel'>中央制御端末が一つだけ照合を要求している。<br>"
+        "要求されているのは——<b>この施設を最後に施錠した人物の照合キー</b>。<br>"
+        "Stage1〜4で二人が拾った3つの断片は、偶然ではなく、その人物の照合キーの"
+        "構成要素だった。組み上げれば、扉が開く。</div>", unsafe_allow_html=True)
     st.markdown("**最終認証コードの構成ルール（両端末共通）:**")
     st.markdown(
         "<div class='pl-panel'>最終コード ＝ <b>①</b> + <b>②</b> + <b>③</b><br>"
@@ -588,30 +681,48 @@ def ending_screen(code, role):
     poll_change(code)
     finalize_ending(code)
     room = room_snapshot(code)
+    pz = build_puzzle(room["seed"])
+    locker = pz["lock_name"]          # 失踪した最終施錠者
+    locker_roma = pz["lock_name_roma"]
     ending = room["ending"]
+
+    # 共通: 認証コードが「誰」だったのかを回収する
+    st.markdown(
+        f"<div class='pl-panel'>最後に入力した照合キーが指していたのは——"
+        f"事故当夜に施設を施錠し、そのまま記録から消えた研究者 "
+        f"<span class='pl-role-p1'>『{locker}』<span style='opacity:0.6'> "
+        f"({locker_roma})</span></span> 本人の職員照合コードだった。<br>"
+        f"二人が半分ずつ拾い集めていたのは、最初からこの名前だったのだ。</div>",
+        unsafe_allow_html=True)
+
     if ending == "true":
         st.markdown("## 🌟 TRUE END — 完全脱出")
         st.success("ノーミスで全認証を突破し、隠された真相ログも回収した。")
         st.markdown(
-            "<div class='pl-panel'>二人は外へ出た。手にした裏ログには、"
-            "事故が『事故』ではなかった記録が残されていた。<br>"
-            "——だが今は、隣にいる相棒と交わした無数の言葉だけで充分だった。</div>",
+            f"<div class='pl-panel'>二人は外へ出た。手にした裏ログには、"
+            f"『{locker}』の失踪が事故ではなかった記録——プロジェクト "
+            f"<b>ECHO</b> の被験者リストに、施錠者自身の名があった事実が残されていた。<br>"
+            f"ノクサ研究機構が消したがった一行。だが今は、隣にいる相棒と交わした"
+            f"無数の言葉だけで充分だった。</div>",
             unsafe_allow_html=True)
     elif ending == "secret":
         st.markdown("## 🩸 SECRET END — 暴かれた真相")
         st.warning("脱出と引き換えに、PAIR LOCK 事故の真相に触れてしまった。")
         st.markdown(
-            "<div class='pl-panel'>裏ログが示していたのは、被験者を『二人一組』で"
-            "閉じ込め続けた施設の本当の目的。<br>協力できる者だけが生き残る——"
-            "その観察記録の、最新の1行に二人の名が加わった。</div>",
+            f"<div class='pl-panel'>裏ログが示していたのは、被験者を『二人一組』で"
+            f"閉じ込め続けた施設の本当の目的——プロジェクト <b>ECHO</b>。<br>"
+            f"『{locker}』も、かつてこの椅子に座った観察者だった。区画 <b>404</b> の"
+            f"記録は今も『参照先が見つかりません』のまま。<br>"
+            f"協力できる者だけが生き残る——その観察記録の最新の1行に、二人の名が加わった。</div>",
             unsafe_allow_html=True)
     else:
         st.markdown("## ✅ NORMAL END — 脱出成功")
         st.success("二人で全認証を突破し、PAIR LOCK から脱出した。")
         st.markdown(
-            "<div class='pl-panel'>片方だけでは、どの扉も開かなかった。<br>"
-            "見えないものを言葉にし、相手の言葉で世界を補う——"
-            "それだけで、ここは抜けられた。</div>", unsafe_allow_html=True)
+            f"<div class='pl-panel'>片方だけでは、どの扉も開かなかった。<br>"
+            f"『{locker}』が誰だったのか、なぜ消えたのかは分からないまま。<br>"
+            f"見えないものを言葉にし、相手の言葉で世界を補う——"
+            f"それだけで、ここは抜けられた。</div>", unsafe_allow_html=True)
 
     st.divider()
     c1, c2 = st.columns(2)
@@ -640,27 +751,41 @@ def lobby():
     st.markdown("# 🔒 PAIR LOCK")
     st.caption("二人協力・非対称情報の暗号脱出 ── 想定プレイ時間 15〜25分")
     st.markdown(
-        "<div class='pl-panel'>地下研究施設 <b>PAIR LOCK</b> が封鎖された。<br>"
-        "脱出には2つの制御端末を<b>同時に</b>操作する必要がある。<br>"
-        "だが事故の影響で、各端末には施設情報の<b>半分しか</b>表示されない。<br><br>"
-        "<span class='pl-role-p1'>あなたにしか見えない情報</span>と "
-        "<span class='pl-role-p2'>相手にしか見えない情報</span>を、"
+        "<div class='pl-panel'>ノクサ研究機構 <span style='opacity:0.7'>(NOXA Institute)</span> の"
+        "地下研究施設 <b>PAIR LOCK</b> で事故が起き、区画が封鎖された。<br>"
+        "中に取り残された研究者と、地上から無線で繋いだ救助オペレーター——"
+        "二人で全制御を解除しなければ脱出路は開かない。<br>"
+        "事故で系統が分断され、各端末には施設情報の<b>半分しか</b>残っていない。<br><br>"
+        "<span class='pl-role-p1'>内側にいる者だけが見えるもの</span>と "
+        "<span class='pl-role-p2'>外の記録にしかないもの</span>を、"
         "声やチャットで補い合え。片方だけでは絶対に解けない。</div>",
         unsafe_allow_html=True)
 
-    st.info("遊び方: 1人が『ルームを作成』→ 4文字のコードを相手に共有 → "
-            "相手は別の端末で『ルームに参加』。2人揃うと開始。")
+    cr1, cr2 = st.columns(2)
+    with cr1:
+        st.markdown(
+            "<div class='pl-panel'><span class='pl-role-p1'>P1 ─ "
+            f"{ROLE_DESC['p1'][0]}</span><br>{ROLE_DESC['p1'][1]}</div>",
+            unsafe_allow_html=True)
+    with cr2:
+        st.markdown(
+            "<div class='pl-panel'><span class='pl-role-p2'>P2 ─ "
+            f"{ROLE_DESC['p2'][0]}</span><br>{ROLE_DESC['p2'][1]}</div>",
+            unsafe_allow_html=True)
+
+    st.info("遊び方: 取り残された側(P1)が『ルームを作成』→ 4文字のコードを救助側に共有 → "
+            "救助オペレーター(P2)が別端末から『ルームに参加』。2人揃うと開始。")
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("#### 🆕 ルームを作成 (P1)")
+        st.markdown("#### 🆕 ルームを作成 (P1 ─ 取り残された研究者)")
         if st.button("ルームを作成する", type="primary", use_container_width=True):
             code = create_room()
             st.session_state.pl_code = code
             st.session_state.pl_role = "p1"
             app_rerun()
     with c2:
-        st.markdown("#### 🔑 ルームに参加 (P2)")
+        st.markdown("#### 🔑 ルームに参加 (P2 ─ 救助オペレーター)")
         join_code = st.text_input("ルームコード (4文字)", key="join_code",
                                   max_chars=4, placeholder="例: 7K2P")
         if st.button("参加する", use_container_width=True):
@@ -760,6 +885,8 @@ def main():
     live_sync(code, role)
     st.divider()
     pz = build_puzzle(room["seed"])
+    # 直前ステージ突破後の無線会話を挟む（真相を小出しに）
+    radio_interlude(role, room["stage"] - 1)
     STAGE_FUNCS[room["stage"]](code, role, pz)
 
 

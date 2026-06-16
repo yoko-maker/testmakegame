@@ -32,6 +32,38 @@ FACILITIES = [
 
 DIFFICULTY = {"☄️ 特訓（5分）": 300, "🌍 標準（15分）": 900, "💀 本番（30分）": 1800}
 
+# 各施設に常駐する人物の声。施設画面で表示し、生死・言葉が結末に反映される。
+FACILITY_VOICES = {
+    "lz_power": (
+        "👷 発電所員・ハル",
+        "「第3市民病院の人工呼吸器が、うちの送電で動いてる。"
+        "あそこには俺の母さんもいるんだ……頼む、電気を戻してくれ」",
+    ),
+    "lz_comm": (
+        "📻 通信士・ミナ",
+        "「各国の避難指示が、この回線一本に懸かってます。"
+        "ノイズの向こうで、みんなが救難信号を送り続けてるんです」",
+    ),
+    "lz_analysis": (
+        "🔬 主任研究員・霧島",
+        "「ここはNOXA研究機構の解析施設。隕石の組成に……"
+        "見覚えのある波形が混じってる。プロジェクトECHOの観測記録と同じだ」",
+    ),
+    "lz_military": (
+        "🎖️ 軍司令官・ガロ大佐",
+        "「照準を預ける。撃ち損じれば終わりだ。"
+        "部下たちは最後の一人まで持ち場を離れん。指揮官、頼んだぞ」",
+    ),
+}
+
+# 施設復旧時に流れる、命に直結する人間味ある速報。
+RESTORE_NEWS = {
+    "lz_power": "🏥 速報: 北区市民病院に電気が戻った。停止寸前だった新生児集中治療室の保育器が、再び静かに動き始めた。",
+    "lz_comm": "📞 速報: 通信回復。沿岸部に取り残された避難者2,000人へ、ようやく高台への誘導が届いた。",
+    "lz_analysis": "🔬 速報: 隕石の弱点となる断層を解析班が特定。研究所からの最後の通信は途切れ気味だった。",
+    "lz_military": "🎖️ 速報: 迎撃システムの照準補正が完了。各国の防衛軍が司令部の指揮下に集結した。",
+}
+
 
 # ==========================================================================
 # 状態 & 時間
@@ -49,6 +81,9 @@ def init_game():
     for _, _, flag, _, _ in FACILITIES:
         init_state(flag, False)
     init_state("lz_ending", None)
+    # トレードオフの選択: 限られた予備電力を「軍」優先 / 「民間」優先 のどちらに回すか。
+    # None=未選択。エンディング分岐に効く。
+    init_state("lz_priority", None)
 
 
 def reset_game():
@@ -73,12 +108,18 @@ def goto(view):
 
 def broadcast(frac):
     if frac > 0.5:
-        return "info", "🛰️ 緊急放送: 隕石は大気圏外。各施設の復旧を急げ。"
+        return "info", (
+            "🛰️ 緊急放送: 隕石は大気圏外。各施設の復旧を急げ。"
+            "──画面の隅に流れる気象局の識別番号『404』が、なぜか点滅している。"
+        )
     if frac > 0.25:
-        return "warning", "📡 ニュース速報: 隕石接近中。全世界が避難を開始した。"
+        return "warning", (
+            "📡 ニュース速報: 隕石接近中。全世界が避難を開始。"
+            "各地の研究機関から研究者の連絡途絶が相次いでいるとの情報も。"
+        )
     if frac > 0.1:
-        return "warning", "🚨 ニュース速報: 衝突軌道を確認。迎撃準備を急げ！"
-    return "error", "⚠️ 最終警告: 衝突まであと僅か！ 今すぐ宇宙センターへ！！"
+        return "warning", "🚨 ニュース速報: 衝突軌道を確認。各都市の病院・避難所が祈るように迎撃を待っている。"
+    return "error", "⚠️ 最終警告: 衝突まであと僅か！ 街の灯りが次々消えていく。今すぐ宇宙センターへ！！"
 
 
 def timer_color(frac):
@@ -87,6 +128,19 @@ def timer_color(frac):
     if frac > 0.25:
         return "#ef6c00"
     return "#c62828"
+
+
+def facility_voice(flag):
+    """施設に常駐する人物の声を表示する。"""
+    if flag in FACILITY_VOICES:
+        speaker, line = FACILITY_VOICES[flag]
+        st.info(f"**{speaker}**\n\n{line}")
+
+
+def restore_news(flag):
+    """復旧した施設の、命に直結する人間味ある速報を流す。"""
+    if flag in RESTORE_NEWS:
+        st.success(RESTORE_NEWS[flag])
 
 
 # ==========================================================================
@@ -124,12 +178,16 @@ def page_intro():
         **緊急事態。** 直径10kmの巨大隕石が地球へ向かっている。
         衝突まで、残された時間はわずか。
 
-        あなたは危機管理本部の最高指揮官。制限時間内に **5つの施設** を復旧し、
+        あなたは危機管理本部の最高指揮官。制限時間内に各施設を復旧し、
         迎撃システムを起動して、人類滅亡を回避せよ。
+
+        施設の向こうには、電気を待つ病院、回線にすがる避難者、
+        持ち場を離れない部下たち——**一つひとつの作業が、誰かの命に直結している。**
 
         施設は **順不同** で攻略可能。だが時間は刻一刻と失われていく——。
         """
     )
+    st.caption("※ 隕石解析を担うのは、意識・記憶を研究する巨大組織『NOXA研究機構』の一施設だという。")
     diff = st.radio("難易度（制限時間）を選択", list(DIFFICULTY.keys()), index=0)
     st.caption("※ タイマーは選択直後ではなく『開始』を押した瞬間から動き出す。")
     if st.button("🚀 ミッション開始", use_container_width=True):
@@ -150,6 +208,37 @@ def page_hub():
     done = facilities_done()
     st.write(f"復旧施設: **{done} / 4**　／　現在の迎撃成功率: **{done * 25}%**")
 
+    # 復旧した施設の速報を流す（命に直結する人間味のあるニュース）。
+    for _, _, flag, _, _ in FACILITIES:
+        if st.session_state[flag]:
+            restore_news(flag)
+
+    # ── トレードオフの選択 ──
+    # 全部は間に合わないと気づいた指揮官に、限られた予備電力の配分を迫る。
+    if done >= 2 and st.session_state.lz_priority is None:
+        st.markdown("---")
+        st.error(
+            "⚡ **苦渋の判断** ⚡\n\n"
+            "予備電力が底をつきかけている。残り時間で全施設を満たすことは、もう不可能だ。"
+            "わずかな電力を、どちらへ回す？"
+        )
+        ch1, ch2 = st.columns(2)
+        with ch1:
+            if st.button("🎖️ 軍を優先（確実な迎撃）", use_container_width=True):
+                st.session_state.lz_priority = "military"
+                st.rerun()
+            st.caption("迎撃の確度は上がる。だが避難中の市民の灯りが消える。")
+        with ch2:
+            if st.button("🏥 民間を優先（市民の命）", use_container_width=True):
+                st.session_state.lz_priority = "civilian"
+                st.rerun()
+            st.caption("病院と避難所は守られる。だが迎撃の余力は削られる。")
+    elif st.session_state.lz_priority == "military":
+        st.warning("🎖️ 配分方針: **軍優先**。市街は暗い。だが迎撃の刃は鋭い。")
+    elif st.session_state.lz_priority == "civilian":
+        st.warning("🏥 配分方針: **民間優先**。街には灯りが残る。迎撃は人の手に懸かる。")
+
+    st.markdown("---")
     for name, icon, flag, view, _ in FACILITIES:
         ok = st.session_state[flag]
         label = f"{icon} {name}" + ("　✅ 復旧済み" if ok else "")
@@ -191,6 +280,7 @@ def view_calc():
     st.markdown("---")
     st.header("⚡ 発電所 ― 計算問題")
     st.caption("配電制御の計算を3問連続で正解し、電力を復旧せよ。")
+    facility_voice("lz_power")
 
     if st.session_state.lz_power:
         st.success("✅ 電力は復旧済み。")
@@ -243,6 +333,7 @@ def view_type():
     st.markdown("---")
     st.header("📡 通信施設 ― タイピング")
     st.caption("通信コードを正確に入力し、各国との通信を回復せよ。")
+    facility_voice("lz_comm")
 
     if st.session_state.lz_comm:
         st.success("✅ 通信は回復済み。")
@@ -286,6 +377,8 @@ SCI_QUIZ = [
     {"q": "隕石に多く含まれる金属は？", "choices": ["アルミ", "鉄", "金", "銅"], "answer": 1},
     {"q": "恐竜絶滅の一因とされる巨大衝突が起きた場所は？",
      "choices": ["サハラ砂漠", "ユカタン半島", "シベリア", "アマゾン"], "answer": 1},
+    {"q": "NOXA研究機構の解析班が隕石内部から検出した、組織内コード『ECHO』と一致する痕跡とは？",
+     "choices": ["規則的な信号パターン", "ただの放射線", "水の結晶", "金の粒子"], "answer": 0},
 ]
 
 
@@ -301,6 +394,9 @@ def view_quiz():
     st.markdown("---")
     st.header("🔬 研究所 ― 科学クイズ")
     st.caption("隕石に関する設問に全問正解し、解析率を高めよ。")
+    facility_voice("lz_analysis")
+    st.caption("📁 解析端末の片隅に、古い研究ログのタイトルが残っている── "
+               "『ECHO-404: 被験者の意識同期記録（破棄予定）』。今は気に留めている時間はない。")
 
     if st.session_state.lz_analysis:
         st.success("✅ 隕石解析は完了済み。")
@@ -369,6 +465,7 @@ def view_reflex():
     st.markdown("---")
     st.header("🪖 軍司令部 ― 反射神経")
     st.caption(f"🎯 を狙って連続 {REFLEX_GOAL} 回タップ。外すと最初から！")
+    facility_voice("lz_military")
 
     if st.session_state.lz_military:
         st.success("✅ 迎撃システムの照準補正は完了済み。")
@@ -437,6 +534,11 @@ def view_space():
         st.write(f"- {icon} {name}: {'✅ 復旧' if st.session_state[flag] else '❌ 未復旧'}")
     st.metric("迎撃成功率", f"{rate}%")
 
+    if st.session_state.lz_priority == "military":
+        st.caption("🎖️ 電力は軍へ。迎撃精度に余力が回っている──だが暗い街で待つ人々の顔が浮かぶ。")
+    elif st.session_state.lz_priority == "civilian":
+        st.caption("🏥 電力は民間へ。街には灯りが残る──迎撃は人の練度だけが頼りだ。")
+
     if done < 4:
         st.warning("⚠️ 未復旧の施設がある。このまま迎撃すると被害が出る恐れがある。")
 
@@ -451,6 +553,37 @@ def view_space():
 # ==========================================================================
 # エンディング
 # ==========================================================================
+def priority_epilogue(ending):
+    """トレードオフの選択が結末にどう響いたかを描く後日談。"""
+    prio = st.session_state.lz_priority
+    if prio is None:
+        return  # 選択するほど施設を復旧しなかった場合は何も語らない
+
+    survived = ending in ("true", "good", "normal")
+    if prio == "military":
+        if survived:
+            st.markdown(
+                "> 🎖️ ガロ大佐「迎撃は成った。指揮官、あなたの判断は正しかった。"
+                "……だが暗闇で耐えた市民たちのことを、私たちは決して忘れない」"
+            )
+        else:
+            st.markdown(
+                "> 🎖️ 軍へ電力を回した代償に、街の灯りは早くに消えていた。"
+                "捧げた犠牲は、報われなかった。"
+            )
+    elif prio == "civilian":
+        if survived:
+            st.markdown(
+                "> 🏥 病院の保育器は最後まで止まらなかった。"
+                "灯りの下で抱かれた赤子の泣き声が、生き延びた世界の最初の音になった。"
+            )
+        else:
+            st.markdown(
+                "> 🏥 市民の灯りは守り抜いた。"
+                "最期の瞬間まで、誰一人として暗闇の中にはいなかった——それだけが、せめてもの慰めだった。"
+            )
+
+
 def page_ending():
     ending = st.session_state.lz_ending
     done = facilities_done()
@@ -508,6 +641,18 @@ def page_ending():
             """
         )
 
+    priority_epilogue(ending)
+
+    # 復旧した施設の人物の声を、結末に反映させる。
+    if ending in ("true", "good", "normal"):
+        survivors = [FACILITY_VOICES[flag][0] for _, _, flag, _, _ in FACILITIES
+                     if st.session_state[flag] and flag in FACILITY_VOICES]
+        if survivors:
+            st.success("🕊️ 生還が確認された声: " + "、".join(survivors))
+    if st.session_state.lz_analysis:
+        st.caption("📁 研究所の解析ログは『NOXA研究機構』本部へ自動転送された。"
+                   "ECHO-404の項目だけが、なぜか送信記録から欠落していた。")
+
     st.caption(f"最終復旧施設: {done} / 4")
     st.markdown("---")
     if st.button("🔄 もう一度挑戦する", use_container_width=True):
@@ -525,6 +670,10 @@ def render_sidebar():
         for name, icon, flag, _, _ in FACILITIES:
             st.sidebar.write(f"{'✅' if st.session_state[flag] else '⬜'} {icon} {name}")
         st.sidebar.caption(f"迎撃成功率: {facilities_done() * 25}%")
+        if st.session_state.lz_priority == "military":
+            st.sidebar.caption("⚡ 配分: 🎖️ 軍優先")
+        elif st.session_state.lz_priority == "civilian":
+            st.sidebar.caption("⚡ 配分: 🏥 民間優先")
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 ミッションをやり直す"):
         reset_game()
