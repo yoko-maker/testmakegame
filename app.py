@@ -140,15 +140,66 @@ def render_locked(key):
 # ==========================================================================
 # 共通調査ボード
 # ==========================================================================
-def _board_node(item):
-    """調査対象を相関図のノードとして描く（未解明はマスク）。"""
-    rev = noxa.state()["board"].get(item, False)
-    label = item if rev else "████"
-    color = "#7CFC9A" if rev else "#556"
-    bg = "rgba(31,122,58,0.14)" if rev else "rgba(90,90,100,0.12)"
-    return (f"<span style='display:inline-block;border:1px solid {color};color:{color};"
-            f"background:{bg};border-radius:5px;padding:3px 10px;margin:3px;"
-            f"font-family:monospace;font-size:0.92em;'>{label}</span>")
+# 相関図ノードの配置（SVG座標。中心x, 中心y）
+_BOARD_NODES = {
+    "天城 真": (350, 30),
+    "NOXA": (350, 92),
+    "ECHO": (150, 158),
+    "第7研究棟": (350, 158),
+    "被験者404": (552, 158),
+    "霧島 玲": (250, 226),
+    "赤い女": (452, 226),
+}
+# 接続線（親 → 子）
+_BOARD_EDGES = [
+    ("天城 真", "NOXA"), ("NOXA", "ECHO"), ("NOXA", "第7研究棟"),
+    ("NOXA", "被験者404"), ("ECHO", "霧島 玲"), ("被験者404", "赤い女"),
+    ("霧島 玲", "赤い女"),
+]
+_NODE_H = 30
+
+
+def _node_w(item):
+    return max(64, len(item) * 15 + 22)
+
+
+def _board_svg():
+    """調査ボードをSVGで描く（ノード・接続線の整列を厳密に保つ）。"""
+    s = noxa.state()
+    rects, texts = [], []
+    for item, (cx, cy) in _BOARD_NODES.items():
+        rev = s["board"].get(item, False)
+        w = _node_w(item)
+        x, y = cx - w / 2, cy - _NODE_H / 2
+        stroke = "#2ec27a" if rev else "#5a5f6b"
+        fill = "rgba(31,122,58,0.18)" if rev else "rgba(90,90,100,0.10)"
+        tcol = "#7CFC9A" if rev else "#7d828c"
+        label = item if rev else "████"
+        rects.append(
+            f"<rect x='{x:.0f}' y='{y:.0f}' width='{w}' height='{_NODE_H}' rx='5' "
+            f"fill='{fill}' stroke='{stroke}' stroke-width='1.2'/>")
+        texts.append(
+            f"<text x='{cx}' y='{cy}' fill='{tcol}' font-size='13' "
+            f"font-family='monospace' text-anchor='middle' "
+            f"dominant-baseline='central'>{label}</text>")
+    lines = []
+    for a, b in _BOARD_EDGES:
+        ax, ay = _BOARD_NODES[a]
+        bx, by = _BOARD_NODES[b]
+        # 縦の親子は端から端へ、横並びは側面同士を結ぶ
+        if abs(ay - by) >= _NODE_H:
+            y1, y2 = ay + _NODE_H / 2, by - _NODE_H / 2
+            lines.append(f"<path d='M{ax} {y1:.0f} V{(y1+y2)/2:.0f} H{bx} V{y2:.0f}' "
+                         f"fill='none' stroke='#3a6' stroke-width='1' opacity='0.55'/>")
+        else:
+            x1 = ax + _node_w(a) / 2
+            x2 = bx - _node_w(b) / 2
+            lines.append(f"<line x1='{x1:.0f}' y1='{ay}' x2='{x2:.0f}' y2='{by}' "
+                         f"stroke='#3a6' stroke-width='1' opacity='0.55'/>")
+    return (
+        "<svg viewBox='0 0 700 256' width='100%' style='max-width:560px;display:block;"
+        "margin:0 auto;'>"
+        + "".join(lines) + "".join(rects) + "".join(texts) + "</svg>")
 
 
 def render_board():
@@ -156,23 +207,7 @@ def render_board():
     revealed = sum(1 for i in noxa.BOARD_ITEMS if s["board"].get(i))
     st.subheader("🗂️ NOXA Investigation Board")
     st.caption(f"調査対象: {revealed} / {len(noxa.BOARD_ITEMS)} 解明 ── クリアで相関図が広がる")
-
-    conn = "<div style='color:#3a6;font-family:monospace;text-align:center;margin:-2px 0;'>{}</div>"
-    diagram = (
-        "<div style='text-align:center;line-height:1.45;'>"
-        + _board_node("天城 真")
-        + conn.format("│")
-        + _board_node("NOXA")
-        + conn.format("┌──────┼──────┐")
-        + "<div>" + _board_node("ECHO") + _board_node("第7研究棟")
-        + _board_node("被験者404") + "</div>"
-        + conn.format("│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│")
-        + "<div>" + _board_node("霧島 玲")
-        + "<span style='color:#3a6;font-family:monospace;'>──</span>"
-        + _board_node("赤い女") + "</div>"
-        + "</div>"
-    )
-    st.markdown(diagram, unsafe_allow_html=True)
+    st.markdown(_board_svg(), unsafe_allow_html=True)
 
     with st.expander("調査メモ"):
         for item in noxa.BOARD_ITEMS:
@@ -200,9 +235,11 @@ def render_observation_log():
         "Status: <span style='color:#f88'>Still investigating.</span>"
     )
     st.markdown(
-        "<div style='background:#070a0f;border:1px solid #355;border-radius:6px;"
-        "padding:12px 14px;font-family:monospace;color:#8fb;font-size:0.9em;"
-        f"line-height:1.6;'>{body}</div>", unsafe_allow_html=True)
+        "<div style='background:#05070b;border:1px solid #2ec27a;border-radius:6px;"
+        "padding:14px 16px;font-family:monospace;color:#8fffb0;font-size:0.9em;"
+        "line-height:1.6;box-shadow:0 0 14px rgba(46,194,122,0.30),"
+        f"inset 0 0 0 1px rgba(46,194,122,0.15);'>{body}</div>",
+        unsafe_allow_html=True)
 
 
 # ==========================================================================

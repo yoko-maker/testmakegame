@@ -19,6 +19,7 @@ import json
 import os
 import random
 import re
+import time
 
 import streamlit as st
 
@@ -229,32 +230,69 @@ def interference_lines(game_key):
     return out
 
 
-def render_intrusion(game_key):
-    """各ゲーム冒頭で呼ぶ。作品間干渉(⑦)と赤い女の侵食(⑥)を控えめに描く。
-
-    ポータル未統合・Streamlit未接続でも安全（no-op）。赤い女の出現可否は
-    セッション内で作品ごとに一度だけ判定し、再描画でのちらつきを防ぐ。
-    """
-    try:
-        for icon, text in interference_lines(game_key):
-            st.markdown(
-                f"<div style='font-family:monospace;color:#d66;font-size:0.82em;"
-                f"border-left:3px solid #c33;padding:2px 8px;margin:4px 0;"
-                f"background:rgba(120,20,20,0.08);'>{icon} {text}</div>",
-                unsafe_allow_html=True)
-
-        lvl = red_woman_level()
-        if lvl <= 0:
-            return
+def _gather_intrusion(game_key):
+    """この作品に出す干渉メッセージ (text, color) を集める。赤い女の出現可否は
+    セッション内で作品ごとに一度だけ判定（ちらつき防止）。"""
+    lines = [(f"{icon} {text}", "#e58a8a")
+             for icon, text in interference_lines(game_key)]
+    lvl = red_woman_level()
+    if lvl > 0:
         key = f"_redwoman_{game_key}"
         if key not in st.session_state:
             prob = [0.0, 0.25, 0.5, 0.85][lvl]
             st.session_state[key] = (random.random() < prob)
         if st.session_state[key]:
             msg = RED_WOMAN_GLIMPSES[min(lvl - 1, len(RED_WOMAN_GLIMPSES) - 1)]
-            st.markdown(
-                f"<div style='color:#e44;font-size:0.82em;opacity:0.85;margin:4px 0;'>"
-                f"🔴 {msg}</div>", unsafe_allow_html=True)
+            lines.append(("🔴 " + msg, "#ff6060"))
+    return lines
+
+
+def _intrusion_static(lines):
+    for text, color in lines:
+        st.markdown(
+            f"<div style='font-family:monospace;color:{color};font-size:0.82em;"
+            f"border-left:3px solid #c33;padding:2px 8px;margin:4px 0;"
+            f"background:rgba(120,20,20,0.08);'>{text}</div>",
+            unsafe_allow_html=True)
+
+
+def _intrusion_cinematic(lines):
+    """画面暗転 → 一文字ずつ打ち込む演出（初回オープン時のみ）。"""
+    ph = st.empty()
+    base = ("position:fixed;inset:0;z-index:99990;background:#050505;"
+            "font-family:monospace;display:flex;flex-direction:column;"
+            "align-items:flex-start;justify-content:center;padding:8% 10%;"
+            "gap:12px;font-size:1.05rem;line-height:1.7;")
+    done = ""
+    for text, color in lines:
+        typed = ""
+        for ch in text:
+            typed += ch
+            cur = done + (f"<div style='color:{color}'>{typed}"
+                          f"<span style='opacity:.55'>▌</span></div>")
+            ph.markdown(f"<div style='{base}'>{cur}</div>", unsafe_allow_html=True)
+            time.sleep(0.02)
+        done += f"<div style='color:{color}'>{text}</div>"
+        time.sleep(0.3)
+    time.sleep(0.7)
+    ph.empty()
+
+
+def render_intrusion(game_key):
+    """各ゲーム冒頭で呼ぶ。作品間干渉(⑦)と赤い女の侵食(⑥)を描く。
+
+    初回オープン時は「暗転→一文字ずつ表示」の演出、以降のリランでは静的表示。
+    ポータル未統合・Streamlit未接続でも安全（no-op）。
+    """
+    try:
+        lines = _gather_intrusion(game_key)
+        if not lines:
+            return
+        shown_key = f"_intrusion_shown_{game_key}"
+        if not st.session_state.get(shown_key):
+            st.session_state[shown_key] = True
+            _intrusion_cinematic(lines)
+        _intrusion_static(lines)
     except Exception:
         pass
 

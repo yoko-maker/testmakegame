@@ -267,6 +267,24 @@ def init_global_state():
     init_state("master_bonus_coins", 0)     # 独白解放を進めるための加算分
     init_state("badges", set())             # 交換した収集バッジ
     init_state("secret_unlocked", False)    # 隠しゲーム「数列の記憶」解放済みか
+    # ポータル統合時は NOXA で認証済みの名前を使い、二重入力させない
+    if _noxa:
+        try:
+            pn = _noxa.state().get("player")
+            if pn:
+                st.session_state.player_name = pn
+        except Exception:
+            pass
+
+
+def portal_name():
+    """ポータルで認証済みのプレイヤー名（統合時のみ）。未統合なら None。"""
+    if _noxa:
+        try:
+            return _noxa.state().get("player") or None
+        except Exception:
+            return None
+    return None
 
 
 def add_coins(amount):
@@ -318,9 +336,15 @@ def page_home():
     )
     st.write("ゲームで遊んでコインを稼ぎ、レベルと実績を集めよう！")
 
-    name = st.text_input("プレイヤー名", value=st.session_state.player_name, max_chars=12)
-    if name != st.session_state.player_name:
-        st.session_state.player_name = name
+    # ポータル経由なら NOXA 認証名をそのまま使い、再入力させない。
+    # 単体起動のときだけ名前入力欄を出す。
+    pn = portal_name()
+    if pn:
+        st.caption(f"🪪 NOXAネットワーク認証済み: **{pn}** さん")
+    else:
+        name = st.text_input("プレイヤー名", value=st.session_state.player_name, max_chars=12)
+        if name != st.session_state.player_name:
+            st.session_state.player_name = name
 
     st.markdown("---")
     render_master()
