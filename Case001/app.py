@@ -160,6 +160,16 @@ section[data-testid="stSidebar"] {
 
 /* code 表示（暗号・PIN等）をタイプライター質感に */
 code, pre, .stCode { font-family: 'Special Elite', monospace !important; }
+
+/* スマホでは画面が小さく、強いヴィネットだとほぼ全面が暗くなるので弱める */
+@media (max-width: 680px) {
+    .stApp::before {
+        box-shadow: inset 0 0 70px 6px rgba(0,0,0,0.45) !important;
+        background:
+            radial-gradient(circle at 50% 0%, rgba(0,0,0,0.0), rgba(0,0,0,0.25) 150%) !important;
+    }
+    .stApp::after { opacity: 0.03 !important; }
+}
 </style>
 """
 

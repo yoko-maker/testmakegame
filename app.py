@@ -69,7 +69,9 @@ def _is_mobile():
 _RESPONSIVE_CSS = """
 <style>
 @media (max-width: 680px) {
-  .block-container { padding: 0.8rem 0.5rem !important; }
+  /* 左右は詰めて表示幅を稼ぐが、上は十分にあけて
+     Streamlitの上部ツールバーにコンテンツが潜り込む（見切れ）のを防ぐ */
+  .block-container { padding: 3rem 0.6rem 1.2rem !important; }
   .stApp, .block-container { overflow-x: hidden !important; }
 
   h1 { font-size: 1.5rem !important; letter-spacing: 1px !important; line-height: 1.25 !important; }
@@ -870,8 +872,20 @@ if not st.session_state.get("obs_logged"):
     st.session_state["obs_logged"] = True
     noxa.record_login()
 
-# --- ロック: 未解放の作品にURL直アクセスしたら遊ばせない ---
 _target = getattr(nav, "url_path", "")
+
+# ゲームページ以外（ホーム等）ではサイドバーを隠す。
+# ゲームから「ポータルに戻る」で戻った際、空のサイドバー（展開状態）が
+# 残って特にスマホで画面を覆ってしまうのを防ぐ。
+if _target not in noxa.GAME_KEYS:
+    st.markdown(
+        "<style>"
+        "[data-testid='stSidebar'],"
+        "[data-testid='stSidebarCollapsedControl'],"
+        "[data-testid='collapsedControl'] { display:none !important; }"
+        "</style>", unsafe_allow_html=True)
+
+# --- ロック: 未解放の作品にURL直アクセスしたら遊ばせない ---
 if _target in noxa.GAME_KEYS and _target not in noxa.unlocked_games():
     render_locked(_target)
     st.stop()
