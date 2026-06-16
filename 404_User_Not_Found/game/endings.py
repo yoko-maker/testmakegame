@@ -84,7 +84,7 @@ def show():
 
     if key == "horror":
         style.jumpscare()
-        st.audio(audio.dread_wav_bytes(seconds=5.0), format="audio/wav")
+        st.audio(audio.dread_wav_bytes(seconds=5.0), format="audio/wav", autoplay=True)
 
     st.markdown(
         f"<h1 style='color:{e['color']};text-align:center'>{e['title']}</h1>",
@@ -110,8 +110,9 @@ def show():
         st.write(", ".join(state.game()["hidden_flags"]) or "(なし)")
 
     if key != "true":
-        st.info("💡 全フラグ(隠しページ・第四の壁を含む)を回収すると "
-                "**TRUE END** に到達できる。周回プレイで挑戦しよう。")
+        st.info("💡 全フラグ(隠しページ /_void・/_void/noxa・第四の壁を含む)を回収すると "
+                "**TRUE END** に到達できる。Stage 4 の隠しリンクから /_void へ潜れば、"
+                "周回せずとも1周で全フラグを揃えられる。")
 
     st.divider()
     c1, c2 = st.columns(2)

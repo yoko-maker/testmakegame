@@ -3,10 +3,10 @@
 著名な研究者・霧島博士が失踪。プレイヤーは探偵として現場を調査し、
 4つの解析ミニゲームで証拠を集め、容疑者を絞り込み、真犯人を推理する。
 
-  🧩 指紋照合       神経衰弱      → 指紋証拠     （犯人＝佐倉／手段＝薬物）
+  🧩 指紋照合       指紋一致探し   → 指紋証拠     （犯人＝佐倉／手段＝薬物）
   📹 防犯カメラ解析 スライドパズル → 容疑者映像   （犯人＝佐倉／B・Cはアリバイ）
-  📱 スマホ解析     暗号解読      → メッセージ履歴（動機＝独占）
-  🧪 研究データ解析 クイズ        → 動機情報     （動機＝独占／偽証拠の存在）
+  📱 スマホ解析     ヒット&ブロー  → メッセージ履歴（動機＝独占）
+  🧪 研究データ解析 タイムライン矛盾発見 → 動機情報 （動機＝独占／偽証拠の存在）
   🔍 隠し解析       全証拠後に解放 → 隠し証拠     （Secret End条件）
 
 真相: 犯人=佐倉(共同研究者) / 動機=研究成果の独占 / 手段=薬物を盛り昏睡させた
@@ -49,12 +49,12 @@ EVIDENCE_CLUE = {
     "指紋証拠": "現場のコーヒーカップから共同研究者・佐倉の指紋を検出。さらにカップから微量の睡眠導入剤が見つかった。",
     "容疑者映像": "事件当夜23:40、白衣の人物が研究室へ最後に入る映像。IDゲート記録は『佐倉』。黒田と高村は当夜の入館記録なし。"
                   "（解析担当注記: 22:08のロビー映像の隅に、赤い服の女が一瞬映り込んでいる。来訪記録に該当者なし。事件との関連は不明。）",
-    "メッセージ履歴": "被害者・霧島玲のスマホを復号。佐倉からの暗号メッセージ『MINE（成果は私のものだ）』に加え、"
+    "メッセージ履歴": "被害者・霧島玲のスマホのロックを解除。佐倉からのメッセージ『成果は私のものだ』に加え、"
                       "玲自身の日記下書き ―『ECHOの権利を独占したい人がいる。私を消したい人がいる。404号室の鍵は預けた』。"
                       "受信トレイの隅には差出人 amagi@noxa.jp の古い未読メール（件名『A.T.承認済 ― 共同研究の件』）も残っていた。",
     "動機情報": "研究データ解析で、ECHO計画の特許出願書類が佐倉の単独名義に書き換えられていたと判明。"
                 "同じフォルダに、黒田を名指しした『脅迫メモ』の画像も保存されていた。",
-    "脅迫メモ": "「成果を渡さなければ後悔するぞ ― 黒田」と署名された脅迫メモ。一見、黒田が真犯人に見える有力証拠。",
+    "脅迫メモ": "「成果を渡さなければ後悔するぞ ― 黒田」と署名された脅迫メモ。",
     "隠し証拠": "佐倉のPCを深掘り。脅迫メモの原本ファイルは事件当夜0:14に佐倉のアカウントで作成・署名されていた。"
                 "黒田を陥れる偽証拠を仕込んだのは佐倉本人。単独犯を取り繕う工作の全貌が露わになった。",
 }
@@ -70,10 +70,10 @@ VICTIM_DIARY = [
 ]
 
 ANALYSES = [
-    ("指紋照合", "🧩", "mem", "指紋証拠", "神経衰弱"),
+    ("指紋照合", "🧩", "print", "指紋証拠", "指紋一致探し"),
     ("防犯カメラ解析", "📹", "slide", "容疑者映像", "スライドパズル"),
-    ("スマホ解析", "📱", "cipher", "メッセージ履歴", "暗号解読"),
-    ("研究データ解析", "🧪", "quiz", "動機情報", "クイズ"),
+    ("スマホ解析", "📱", "pin", "メッセージ履歴", "ヒット&ブロー"),
+    ("研究データ解析", "🧪", "timeline", "動機情報", "タイムライン矛盾発見"),
 ]
 
 # 容疑者の証言（二段構え）。各段で異なる鍵証拠を突きつけて崩す。
@@ -87,7 +87,7 @@ INTERROGATION = {
                       "『自宅にいた』という証言は崩れましたね。"},
             {"claim": "…確かに立ち寄った。だが博士とは良好な関係だ。私が手にかける理由などない。",
              "key": "メッセージ履歴",
-             "break": "あなたが博士へ送った暗号メッセージ ―『MINE（成果は私のものだ）』。"
+             "break": "あなたが博士へ送ったメッセージ ―『成果は私のものだ』。"
                       "研究を独占しようとする強い動機があった。もう言い逃れはできない。"},
         ],
     },
@@ -238,25 +238,23 @@ def page_board():
     # ミスリードの見破り → これを経て隠し解析が解放される（Secret Endの核心）
     base4 = all(has_evidence(r) for _, _, _, r, _ in ANALYSES)
     if st.session_state.case_redherring and not st.session_state.get("case_saw_through"):
-        st.error("📄 **黒田を名指しする『脅迫メモ』** が見つかっている。"
-                 "素直に読めば黒田が犯人だ ― だが被害者の手記では黒田とは“和解済み”。何かがおかしい。")
+        st.write("📄 **黒田を名指しする『脅迫メモ』** が証拠として見つかっている。"
+                 "この証拠をどう扱うか、あなたの判断は？")
         cse1, cse2 = st.columns(2)
-        if cse1.button("✅ 脅迫メモを“額面通り”受け取る", use_container_width=True):
+        if cse1.button("✅ 脅迫メモをそのまま信じる", use_container_width=True):
             st.session_state.case_memo_trust = True
             st.rerun()
-        if cse2.button("🧐 脅迫メモを“偽証拠”と疑う", use_container_width=True):
+        if cse2.button("🧐 脅迫メモを疑ってみる", use_container_width=True):
             st.session_state.case_saw_through = True
             st.session_state.case_memo_trust = False
             st.rerun()
-        if st.session_state.get("case_memo_trust"):
-            st.warning("…黒田が怪しいと結論づけかけている。だが本当にそれでいいのか？ もう一度、メモの整合性を疑ってみよう。")
 
     if st.session_state.get("case_saw_through"):
-        st.info("🧐 あなたは脅迫メモを偽証拠と見抜いた。本物なら、メモを仕込んだ“真犯人の痕跡”がどこかに残っているはずだ。")
+        st.info("🧐 あなたは脅迫メモを疑った。本当に作為があるなら、メモを仕込んだ者の痕跡がどこかに残っているはずだ。")
 
     # 隠し解析（全4証拠 ＋ 偽証拠の見破りで解放）
     if base4 and st.session_state.get("case_saw_through") and not has_evidence("隠し証拠"):
-        st.warning("🔍 偽証拠の出所を追え。佐倉のPCにまだ解析していない領域がある。")
+        st.write("🔍 メモの出所を追うなら、佐倉のPCにまだ解析していない領域がある。")
         if st.button("🔍 佐倉のPCを深掘り解析する", use_container_width=True):
             gain_evidence("隠し証拠")
             st.rerun()
@@ -287,7 +285,7 @@ def page_suspects():
     st.write("**職業:** ECHO計画の共同研究者。霧島博士の右腕。")
     st.write("**動機:** 10年の研究成果を独占し、自分の名で発表したい野心。特許の単独名義化を画策。")
     st.write("**アリバイ:** 「当夜は自宅にいた」と主張。だが研究室のIDゲート記録が残っている。")
-    st.write("**嘘:** 博士とは『良好な関係』だと言うが、独占を迫る暗号メッセージを送っていた。")
+    st.write("**嘘:** 博士とは『良好な関係』だと言うが、独占を迫るメッセージを送っていた。")
 
     st.subheader("容疑者B ― 黒田 修三（くろだ しゅうぞう／58）")
     st.write("**職業:** 霧島博士の元上司。研究方針の対立で左遷された過去を持つ。")
@@ -306,15 +304,12 @@ def page_suspects():
     if has_evidence("メッセージ履歴"):
         for line in VICTIM_DIARY:
             st.caption(f"・{line}")
-        st.info("📕 手記が示す構図: 黒田とは“和解済み”、高村は“施設に入れない外部者”。"
-                "そして『特許から私を外そうとする者』― 内部にいて成果を独占したい人物こそが鍵だ。")
     else:
         st.caption("（被害者のスマホを復号すれば、本人の手記が読めるはず ― スマホ解析を進めよう）")
 
     st.markdown("---")
     if st.session_state.case_redherring:
-        st.error("📄 **要注意の証拠** ― 黒田を名指しした『脅迫メモ』が見つかっている。"
-                 "一見すると黒田が犯人のようだが…日記の和解の記述と食い違う。誰かの作為では？")
+        st.write("📄 黒田を名指しした『脅迫メモ』が証拠として見つかっている。")
 
     st.subheader("🔎 これまでに判明した手がかり")
     if st.session_state.case_clues:
@@ -332,24 +327,36 @@ def page_suspects():
 
 
 # ==========================================================================
-# ミニゲーム1: 神経衰弱 → 指紋証拠
+# ミニゲーム1: 指紋一致探し → 指紋証拠
 # ==========================================================================
-PRINT_EMOJIS = ["🔍", "🧪", "🩸", "🔑", "📱", "💊", "🗝️", "📄"]
+# 8×（線の向き×渦の形）で見分けのつく指紋パターンを構成。
+# 並んだ指紋の中から、現場指紋と完全に一致する1枚を目視で選ばせる。
+PRINT_RIDGE = ["╱╲╱╲", "╲╱╲╱", "╳╳╳╳", "═══", "║║║║", "◌◌◌", "◍◍◍", "❨❨❨"]
+PRINT_CORE = ["◉", "◎", "⊙", "●", "◐", "◑", "✸", "✦"]
 
 
-def setup_mem():
-    deck = PRINT_EMOJIS * 2
-    random.shuffle(deck)
-    st.session_state.rm_mem_deck = deck
-    st.session_state.rm_mem_revealed = [False] * len(deck)
-    st.session_state.rm_mem_matched = [False] * len(deck)
-    st.session_state.rm_mem_moves = 0
-    st.session_state.rm_mem_pending = None
+def make_print(ridge, core):
+    """指紋カードの見た目を生成（線の流れ＋中心の渦）。"""
+    return f"{ridge}\n {core}{core}\n{ridge}"
 
 
-def view_mem():
-    st.header("🧩 指紋照合（神経衰弱）")
-    st.caption("同じ指紋マーカーのペアを全て揃えると、指紋証拠が照合できる。")
+def setup_print():
+    # 8種の指紋パターンから現場指紋を1つ選び、残りは別パターンを並べる。
+    patterns = list(zip(PRINT_RIDGE, PRINT_CORE))
+    random.shuffle(patterns)
+    target = patterns[0]
+    # 並べる候補（現場指紋1枚＋紛らわしいダミー）。target を必ず1枚だけ含める。
+    others = patterns[1:6]
+    cards = others + [target]
+    random.shuffle(cards)
+    st.session_state.rm_print_target = target
+    st.session_state.rm_print_cards = cards
+    st.session_state.rm_print_miss = 0
+
+
+def view_print():
+    st.header("🧩 指紋照合（指紋一致探し）")
+    st.caption("現場のコーヒーカップから採取した指紋と、ぴったり一致する1枚を候補から見つけ出せ。")
 
     if has_evidence("指紋証拠"):
         st.success("✅ 指紋証拠は照合済み。")
@@ -357,45 +364,34 @@ def view_mem():
             goto("board")
         return
 
-    if "rm_mem_deck" not in st.session_state:
-        setup_mem()
+    if "rm_print_cards" not in st.session_state:
+        setup_print()
 
-    deck = st.session_state.rm_mem_deck
-    revealed = st.session_state.rm_mem_revealed
-    matched = st.session_state.rm_mem_matched
+    target = st.session_state.rm_print_target
+    cards = st.session_state.rm_print_cards
 
-    pending = [i for i in range(len(deck)) if revealed[i] and not matched[i]]
-    if len(pending) == 2:
-        i, j = pending
-        if deck[i] == deck[j]:
-            matched[i] = matched[j] = True
-        st.session_state.rm_mem_pending = pending
+    st.markdown("##### 🔬 現場で採取した指紋（照合の基準）")
+    st.code(make_print(*target), language=None)
 
-    cleared = all(matched)
-    if cleared:
-        gain_evidence("指紋証拠")
+    st.markdown("##### 🗂️ 容疑者データベースの指紋候補")
+    st.write("基準と完全に一致するものを1枚選べ。線の流れと中心の渦をよく見比べること。")
 
-    for row in range(4):
-        cols = st.columns(4)
-        for c in range(4):
-            idx = row * 4 + c
-            face = deck[idx] if (revealed[idx] or matched[idx]) else "❓"
-            disabled = revealed[idx] or matched[idx] or cleared
-            if cols[c].button(face, key=f"mem_{idx}", use_container_width=True, disabled=disabled):
-                pend = st.session_state.rm_mem_pending
-                if pend:
-                    for p in pend:
-                        if not matched[p]:
-                            revealed[p] = False
-                    st.session_state.rm_mem_pending = None
-                revealed[idx] = True
-                st.session_state.rm_mem_moves += 1
+    for row in range(2):
+        cols = st.columns(3)
+        for c in range(3):
+            idx = row * 3 + c
+            card = cards[idx]
+            cols[c].code(make_print(*card), language=None)
+            if cols[c].button(f"この指紋を照合 (No.{idx + 1})", key=f"print_{idx}", use_container_width=True):
+                if card == target:
+                    gain_evidence("指紋証拠")
+                else:
+                    st.session_state.rm_print_miss += 1
                 st.rerun()
 
-    st.metric("手数", st.session_state.rm_mem_moves)
-    if cleared:
-        st.balloons()
-        st.success("🎉 全ペア一致！ **指紋証拠** を入手した。")
+    miss = st.session_state.rm_print_miss
+    if miss:
+        st.error(f"❌ 一致しない指紋だ。線の向きと中心の形をもう一度確認しよう。（誤照合 {miss} 回）")
 
     if st.button("↩️ 捜査ボードに戻る"):
         goto("board")
@@ -479,73 +475,88 @@ def view_slide():
 
 
 # ==========================================================================
-# ミニゲーム3: 暗号解読 → メッセージ履歴
+# ミニゲーム3: ヒット&ブロー（暗証推理） → メッセージ履歴
 # ==========================================================================
-def setup_cipher():
-    shift = random.randint(3, 23)
-    plain = "MINE"
-    cipher = "".join(chr((ord(ch) - 65 + shift) % 26 + 65) for ch in plain)
-    st.session_state.rm_cipher_shift = shift
-    st.session_state.rm_cipher_text = cipher
-    st.session_state.rm_cipher_plain = plain
-    st.session_state.rm_cipher_miss = 0
+# 被害者スマホのロックは4桁の暗証番号（数字は重複なし）。
+# 毎回の入力に対し「ヒット＝数字も位置も一致」「ブロー＝数字はあるが位置違い」を返す。
+def setup_pin():
+    digits = random.sample("0123456789", 4)
+    st.session_state.rm_pin_code = "".join(digits)
+    st.session_state.rm_pin_history = []  # [(guess, hit, blow), ...]
 
 
-def view_cipher():
-    st.header("📱 スマホ解析（暗号解読）")
-    st.caption("被害者のスマホに残る暗号メッセージを復号せよ。")
+def pin_judge(secret, guess):
+    hit = sum(1 for a, b in zip(secret, guess) if a == b)
+    blow = sum(1 for g in guess if g in secret) - hit
+    return hit, blow
+
+
+def view_pin():
+    st.header("📱 スマホ解析（ヒット&ブロー）")
+    st.caption("被害者のスマホのロックは4桁の暗証番号（0〜9、数字の重複なし）。"
+               "推理して入力すると、ヒント（ヒット/ブロー）が返る。")
 
     if has_evidence("メッセージ履歴"):
-        st.success("✅ メッセージ履歴は復号済み。")
+        st.success("✅ メッセージ履歴は解除済み。")
         if st.button("↩️ 捜査ボードに戻る"):
             goto("board")
         return
 
-    if "rm_cipher_text" not in st.session_state:
-        setup_cipher()
+    if "rm_pin_code" not in st.session_state:
+        setup_pin()
 
-    shift = st.session_state.rm_cipher_shift
-    cipher = st.session_state.rm_cipher_text
+    secret = st.session_state.rm_pin_code
+    history = st.session_state.rm_pin_history
 
-    st.code(f"暗号文:  {' '.join(cipher)}", language=None)
-    st.info(f"💡 各アルファベットを **+{shift} 文字ずらして** 暗号化されている。元の英単語に戻せ。")
-    ans = st.text_input("復号した英単語", placeholder="例: WORD")
+    st.info("💡 **ヒット** = 数字も位置も合っている桁数　/　"
+            "**ブロー** = 数字は暗証番号に含まれるが位置が違う桁数。"
+            "4ヒットで解除。")
 
-    if st.button("🔓 復号"):
-        if ans.strip().upper().replace(" ", "") == st.session_state.rm_cipher_plain:
-            gain_evidence("メッセージ履歴")
-            st.rerun()
+    ans = st.text_input("暗証番号を入力（4桁・数字は重複しない）", max_chars=4, placeholder="例: 0123")
+
+    if st.button("🔓 入力して照合"):
+        g = ans.strip()
+        if len(g) != 4 or not g.isdigit():
+            st.error("❌ 4桁の数字を入力してください。")
+        elif len(set(g)) != 4:
+            st.error("❌ 暗証番号に同じ数字は使われていない。重複のない4桁で。")
         else:
-            st.session_state.rm_cipher_miss += 1
-            st.error(f"❌ 復号失敗。各文字を {shift} 戻す（A→Zを跨ぐ）と意味の通る英単語になる。")
+            hit, blow = pin_judge(secret, g)
+            history.append((g, hit, blow))
+            if hit == 4:
+                gain_evidence("メッセージ履歴")
+            st.rerun()
 
-    if st.session_state.rm_cipher_miss >= 2:
-        ex = cipher[0]
-        dec = chr((ord(ex) - 65 - shift) % 26 + 65)
-        st.caption(f"（ヒント: 先頭 {ex} → {dec}。意味は『私のもの』）")
+    if history:
+        st.markdown("##### 📋 これまでの試行")
+        for i, (g, hit, blow) in enumerate(reversed(history), 1):
+            no = len(history) - i + 1
+            st.write(f"`{no:2}`　**{g}**　→　🎯 ヒット {hit}　・　🔵 ブロー {blow}")
+        st.caption(f"試行回数: {len(history)}")
 
     if st.button("↩️ 捜査ボードに戻る"):
         goto("board")
 
 
 # ==========================================================================
-# ミニゲーム4: クイズ → 動機情報
+# ミニゲーム4: タイムライン矛盾発見 → 動機情報
 # ==========================================================================
-CASE_QUIZ = [
-    {"q": "霧島博士が率いていた極秘プロジェクトの名は？",
-     "choices": ["ECHO計画", "MIRROR計画", "ORACLE計画", "PHOENIX計画"], "answer": 0},
-    {"q": "事件後、ECHOの特許出願書類はどう変わっていた？",
-     "choices": ["破棄されていた", "佐倉の単独名義に書換", "黒田の名義に変更", "変化なし"], "answer": 1},
-    {"q": "佐倉が事件後に取ろうとした行動は？",
-     "choices": ["警察へ自首", "論文の単独発表", "海外へ逃亡", "研究の中止"], "answer": 1},
-    {"q": "同じフォルダで見つかった、黒田を名指しする文書は？",
-     "choices": ["推薦状", "脅迫メモ", "辞表", "領収書"], "answer": 1},
+# 佐倉が提出したアリバイ時刻表。一見筋が通っているが、1項目だけ辻褄が合わない。
+# その矛盾した1項目を見抜くと、供述の嘘＝動機の核心（独占）に辿り着く。
+TIMELINE = [
+    {"time": "21:30", "text": "研究棟を出て帰宅したと供述。", "ok": True},
+    {"time": "22:00", "text": "自宅に到着し、夕食をとったと供述。", "ok": True},
+    {"time": "23:40", "text": "自宅で就寝したと供述。", "ok": False,
+     "why": "防犯カメラには23:40に佐倉のIDで研究室へ入る姿が記録されている。"
+            "『自宅で就寝』とは両立しない ― ここに供述の嘘がある。"},
+    {"time": "翌0:30", "text": "物音で一度目を覚ましたが、すぐ眠ったと供述。", "ok": True},
+    {"time": "翌7:00", "text": "起床し、いつも通り出勤したと供述。", "ok": True},
 ]
 
 
-def view_quiz():
-    st.header("🧪 研究データ解析（クイズ）")
-    st.caption("回収した研究データに関する設問。全問正解で動機情報が得られる。")
+def view_timeline():
+    st.header("🧪 研究データ解析（タイムライン矛盾発見）")
+    st.caption("佐倉が提出したアリバイ時刻表。集めた証拠と突き合わせ、辻褄の合わない1項目を見抜け。")
 
     if has_evidence("動機情報"):
         st.success("✅ 動機情報は解析済み。")
@@ -553,44 +564,34 @@ def view_quiz():
             goto("board")
         return
 
-    init_state("rm_quiz_idx", 0)
-    init_state("rm_quiz_correct", 0)
-    init_state("rm_quiz_answered", False)
+    init_state("rm_timeline_miss", 0)
 
-    idx = st.session_state.rm_quiz_idx
-    item = CASE_QUIZ[idx]
-    st.progress(idx / len(CASE_QUIZ), text=f"第 {idx + 1} 問 / {len(CASE_QUIZ)}")
-    st.subheader(item["q"])
-
-    if not st.session_state.rm_quiz_answered:
-        for i, ch in enumerate(item["choices"]):
-            if st.button(ch, key=f"qz_{idx}_{i}", use_container_width=True):
-                st.session_state.rm_quiz_answered = True
-                st.session_state.rm_quiz_last = (i == item["answer"])
-                if st.session_state.rm_quiz_last:
-                    st.session_state.rm_quiz_correct += 1
-                st.rerun()
+    st.markdown("##### 🕰️ 佐倉のアリバイ供述（時系列）")
+    if has_evidence("容疑者映像"):
+        st.caption("（防犯カメラ解析の記録と照合できる。矛盾する供述があるはずだ。）")
     else:
-        if st.session_state.rm_quiz_last:
-            st.success("⭕ 正解！")
-        else:
-            st.error(f"❌ 不正解… 正解は「{item['choices'][item['answer']]}」")
-        last = idx + 1 == len(CASE_QUIZ)
-        if st.button("結果を見る" if last else "次の問題へ", key=f"qz_next_{idx}"):
-            st.session_state.rm_quiz_answered = False
-            if last:
-                if st.session_state.rm_quiz_correct == len(CASE_QUIZ):
-                    gain_evidence("動機情報")
-                else:
-                    st.session_state.rm_quiz_idx = 0
-                    st.session_state.rm_quiz_correct = 0
-                    st.session_state.rm_quiz_failed = True
+        st.caption("（先に防犯カメラ解析を進めると、矛盾を裏づけやすい。）")
+
+    for idx, item in enumerate(TIMELINE):
+        cols = st.columns([1, 4])
+        cols[0].markdown(f"**{item['time']}**")
+        cols[1].write(item["text"])
+        if cols[1].button("この供述は矛盾している", key=f"tl_{idx}", use_container_width=True):
+            if not item["ok"]:
+                st.session_state.rm_timeline_found = item["why"]
+                gain_evidence("動機情報")
             else:
-                st.session_state.rm_quiz_idx += 1
+                st.session_state.rm_timeline_miss += 1
+                st.session_state.rm_timeline_found = None
             st.rerun()
 
-    if st.session_state.get("rm_quiz_failed"):
-        st.warning("⚠️ 全問正解が必要だ。最初から解析し直そう。")
+    found = st.session_state.get("rm_timeline_found")
+    if found:
+        st.success(f"🎯 矛盾を発見！ {found}")
+        st.info("供述の嘘が割れたことで、特許を単独名義に書き換えた事実 ― **独占の動機** が浮かび上がった。"
+                "同じフォルダには黒田を名指しした『脅迫メモ』の画像も保存されていた。")
+    elif st.session_state.rm_timeline_miss:
+        st.error(f"❌ その供述に矛盾はない。他の証拠と突き合わせて考え直そう。（誤り {st.session_state.rm_timeline_miss} 回）")
 
     if st.button("↩️ 捜査ボードに戻る"):
         goto("board")
@@ -601,11 +602,15 @@ def view_quiz():
 # ==========================================================================
 def page_interrogate():
     st.header("🔦 容疑者の追及")
-    st.write("容疑者の証言に、集めた**証拠を突きつけて**矛盾を暴け。証言は二段構え、各段で鍵となる証拠は異なる。")
+    st.markdown(
+        "**進め方:**　①追及する容疑者を選ぶ　→　②今出ている証言を読む　→　"
+        "③その証言を崩せる証拠を1つ選んで突きつける。\n\n"
+        "証言は**二段構え**。各段で“鍵となる証拠”は異なる。正しい証拠を順に突きつけると、その容疑者の白黒が確定する。"
+    )
 
     credit = st.session_state.case_credit
     st.markdown(f"**🛡️ 捜査信用度:** {'❤️' * credit}{'🖤' * (MAX_CREDIT - credit)}")
-    st.caption("誤った証拠を突きつけると信用度が下がる。0になると捜査から外される。")
+    st.caption("⚠️ 見当違いの証拠を突きつけると信用度が1減る。0になると捜査失格(Bad End)。")
 
     evs = list(st.session_state.case_evidences)
     if not evs:
@@ -614,29 +619,46 @@ def page_interrogate():
             goto("board")
         return
 
-    sel = st.radio("追及する容疑者", SUSPECTS, key="itg_sel")
+    verdicts = st.session_state.case_verdicts
+
+    # 容疑者ごとの進捗を一覧で示す（誰が未着手・進行中・完了か一目で分かるように）
+    st.markdown("##### 👥 容疑者ごとの追及状況")
+    for s in SUSPECTS:
+        st_idx = st.session_state.case_stage.get(s, 0)
+        total = len(INTERROGATION[s]["stages"])
+        if s in verdicts:
+            mark = "🔴 クロ（容疑濃厚）" if verdicts[s] == "クロ" else "🟢 シロ（容疑圏外）"
+            st.caption(f"・{s}　― ✅ 追及完了：{mark}")
+        elif st_idx > 0:
+            st.caption(f"・{s}　― ⏳ 追及中（第{st_idx + 1}段／全{total}段）")
+        else:
+            st.caption(f"・{s}　― ⬜ 未着手（全{total}段）")
+
+    st.markdown("---")
+    sel = st.radio("① 追及する容疑者を選ぶ", SUSPECTS, key="itg_sel")
     data = INTERROGATION[sel]
     stages = data["stages"]
     s_idx = SUSPECTS.index(sel)
-    verdicts = st.session_state.case_verdicts
     stage_idx = st.session_state.case_stage.get(sel, 0)
     resolved = sel in verdicts
 
-    st.markdown(f"##### 🗣️ {sel} の追及")
+    short = sel.split("（")[0]
+    st.markdown(f"##### 🗣️ {sel} の追及（全{len(stages)}段）")
 
     # すでに崩した証言を表示
     for i in range(stage_idx):
-        st.success(f"✅ 「{stages[i]['claim']}」\n\n→ {stages[i]['break']}")
+        st.success(f"✅ 第{i + 1}段クリア　「{stages[i]['claim']}」\n\n→ {stages[i]['break']}")
 
     if resolved:
         badge = "🔴 クロ（容疑濃厚）" if verdicts[sel] == "クロ" else "🟢 シロ（容疑圏外）"
-        st.markdown(f"### 追及完了 ― {badge}")
+        st.markdown(f"### 🎯 {short} の追及完了 ― {badge}")
     else:
         cur = stages[stage_idx]
-        st.info(f"証言 {stage_idx + 1}/{len(stages)}：「{cur['claim']}」")
-        st.write("どの証拠を突きつける？")
+        st.info(f"② 現在の証言【第{stage_idx + 1}段／全{len(stages)}段】\n\n"
+                f"🗨️ {short}:「{cur['claim']}」")
+        st.markdown("③ **この証言を崩せる証拠を1つ選んで突きつけろ:**")
         for ev in evs:
-            if st.button(f"📎 {ev} を突きつける", key=f"itg_{s_idx}_{stage_idx}_{ev}", use_container_width=True):
+            if st.button(f"📎 「{ev}」を突きつける", key=f"itg_{s_idx}_{stage_idx}_{ev}", use_container_width=True):
                 if ev == cur["key"]:
                     st.session_state.case_stage[sel] = stage_idx + 1
                     if stage_idx + 1 >= len(stages):
@@ -648,7 +670,7 @@ def page_interrogate():
                         st.session_state.case_ending = "blunder"
                     st.session_state.itg_reaction = (
                         sel, stage_idx,
-                        f"《{ev}》を突きつけたが、{sel.split('（')[0]}は動じない。"
+                        f"《{ev}》を突きつけたが、{short}は動じない。"
                         "「それが何の関係が？」― 決定打にならず、信用度が下がった。",
                     )
                 st.rerun()
@@ -659,7 +681,7 @@ def page_interrogate():
 
     st.markdown("---")
     resolved_n = sum(1 for s in SUSPECTS if s in verdicts)
-    st.caption(f"追及の進捗: {resolved_n}/3")
+    st.caption(f"追及の進捗: 完了 {resolved_n}/3")
     if resolved_n == len(SUSPECTS):
         kuro = [s for s in SUSPECTS if verdicts[s] == "クロ"]
         st.success("✅ 全員の追及が完了。アリバイが崩れたのは ― " + ("、".join(kuro) if kuro else "誰もいない…？"))
@@ -841,9 +863,9 @@ else:
         "suspects": page_suspects,
         "interrogate": page_interrogate,
         "deduce": page_deduce,
-        "mem": view_mem,
+        "print": view_print,
         "slide": view_slide,
-        "cipher": view_cipher,
-        "quiz": view_quiz,
+        "pin": view_pin,
+        "timeline": view_timeline,
     }
     VIEW_DISPATCH[st.session_state.case_view]()

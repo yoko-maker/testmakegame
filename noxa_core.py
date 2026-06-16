@@ -77,6 +77,7 @@ def _default_state():
         "board": {item: False for item in BOARD_ITEMS},
         "choices": {},
         "seen_intro": False,
+        "seen_unlocks": [],  # 解放お知らせを既に出した作品キー
     }
 
 
@@ -90,6 +91,7 @@ def state():
         s["cleared"].setdefault(k, False)
     for item in BOARD_ITEMS:
         s["board"].setdefault(item, False)
+    s.setdefault("seen_unlocks", [])
     return s
 
 
@@ -195,6 +197,12 @@ def is_cleared(key):
 def clear_count():
     s = state()
     return sum(1 for k in GAME_KEYS if s["cleared"].get(k))
+
+
+def clears_excluding(key):
+    """指定キー以外のクリア数（例: アーケードの段階解放で自己依存の循環を避ける）。"""
+    s = state()
+    return sum(1 for k in GAME_KEYS if k != key and s["cleared"].get(k))
 
 
 def all_cleared():

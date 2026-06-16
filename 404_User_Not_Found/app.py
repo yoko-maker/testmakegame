@@ -60,7 +60,7 @@ def title_screen():
     st.markdown("<h1>USER NOT FOUND</h1>", unsafe_allow_html=True)
     st.caption("ARG / 都市伝説 / ホラー / 謎解き ── 想定プレイ時間 60〜120分")
 
-    st.audio(audio.dread_wav_bytes(seconds=8.0), format="audio/wav")
+    st.audio(audio.dread_wav_bytes(seconds=8.0), format="audio/wav", autoplay=True)
     st.caption("🎧 ヘッドホン推奨。暗い部屋で、ひとりで。")
 
     style.boxed(
@@ -94,7 +94,7 @@ def title_screen():
             "- エンディングは4種 (Normal / Secret / Horror / True)\n"
             "- 失踪者 AKIRA の人格断片を各ステージで収集 (SNS / 音声 / メモ)\n"
             "- 隠しページ2種・隠しイベント・第四の壁・周回プレイ要素あり\n"
-            f"- 全{len(state.TRUE_END_FLAGS)}フラグ回収で **TRUE END**"
+            f"- 全{len(state.TRUE_END_FLAGS)}フラグ回収で **TRUE END** (周回不要・1周で到達可能)"
         )
 
 

@@ -36,9 +36,11 @@ def caesar_game() -> bool:
     cipher = "DULND GQLI"
 
     st.markdown("#### ▌シーザー暗号")
-    st.write("メール本文の末尾に、ずらされた文字列が紛れている。")
     style.boxed(f"暗号文: <code>{cipher}</code>")
-    st.caption("ヒント: 文字をずらしても、まだ『鏡の中』だ。")
+
+    with st.expander("💡 ヒントを見る"):
+        st.write("メール本文の末尾に、ずらされた文字列が紛れている。")
+        st.caption("文字をずらしても、まだ『鏡の中』だ。")
 
     if _is_solved(name):
         st.success("復号済み: FIND AKIRA")
@@ -112,7 +114,9 @@ def image_search_game() -> bool:
     st.markdown("#### ▌画像探索")
     st.write("ノイズ画像のどこかに隠し文字が埋め込まれている。読み取って入力せよ。")
     st.image(images.make_hidden_image(secret), caption="復元された添付画像 #2")
-    st.caption("ヒント: 目を細めて見ろ。")
+
+    with st.expander("💡 ヒントを見る"):
+        st.caption("目を細めて見ろ。")
 
     if _is_solved(name):
         st.success("隠し文字を発見: NULL")
@@ -138,11 +142,11 @@ def morse_game() -> bool:
     st.markdown("#### ▌モールス信号解読")
     st.write("ノイズに埋もれた録音が、ひとりでに再生され始める。"
              "ヘッドホンを着けて、耳を澄ませ——聞き取れるのは、信号だけではないかもしれない。")
-    st.audio(audio.morse_to_wav_bytes(message), format="audio/wav")
+    st.audio(audio.morse_to_wav_bytes(message), format="audio/wav", autoplay=True)
     style.whisper("……たすけて……ここから だして……")
 
     # 符号表は手元の資料として常備（耳で解読するための最低限の手がかり）
-    with st.expander("📖 モールス符号 早見表"):
+    with st.expander("💡 ヒント: モールス符号 早見表"):
         letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         rows = [f"{ch} = {audio.MORSE[ch]}" for ch in letters]
         cols = st.columns(4)
@@ -183,8 +187,11 @@ def vigenere_game() -> bool:
     cipher = ciphers.vigenere_encrypt(plain, key)
 
     st.markdown("#### ▌ヴィジュネル暗号")
-    st.write("Webログから抽出した暗号文。鍵はこれまでに何度も見た4文字。")
+    st.write("Webログから暗号文を抽出した。復号には鍵が必要だ。")
     style.boxed(f"暗号文: <code>{cipher}</code>")
+
+    with st.expander("💡 ヒントを見る"):
+        st.caption("鍵はこれまでに何度も見た4文字。組織の名前を思い出せ。")
 
     if _is_solved(name):
         st.success("復号済み: THEY ARE WATCHING YOU")

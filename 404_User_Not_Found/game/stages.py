@@ -117,7 +117,7 @@ def hidden_page():
     st.header("/_void/ — ACCESS GRANTED")
     style.jumpscare()
     style.glitch_text("404 USER NOT FOUND")
-    st.audio(audio.dread_wav_bytes(), format="audio/wav")
+    st.audio(audio.dread_wav_bytes(), format="audio/wav", autoplay=True)
     st.markdown(
         "ここは消されたユーザーたちの墓場。無数の『404』が、名前を奪われたまま並んでいる。<br>"
         "スクロールしても、しても、終わらない。AKIRA もその一人だった。<br>"
@@ -167,7 +167,7 @@ def noxa_log_page():
     st.header("/_void/noxa/ — 404 の裏側")
     style.jumpscare()
     style.glitch_text("NOXA INSTITUTE")
-    st.audio(audio.dread_wav_bytes(seconds=7.0), format="audio/wav")
+    st.audio(audio.dread_wav_bytes(seconds=7.0), format="audio/wav", autoplay=True)
     st.markdown(
         "404 は『見つからない』エラーではなかった。<br>"
         "それは <b>NOXA研究機構</b> が、消した人間に貼る<b>封印の番号</b>だった。<br>"
@@ -249,9 +249,18 @@ def stage5():
                 state.goto(100)
                 st.rerun()
             else:
-                missing = state.flag_count()
-                st.warning(f"フラグ不足 ({missing}/{len(state.TRUE_END_FLAGS)})。"
-                           " 隠しページ2種・第四の壁を含む全てを回収する必要がある。")
+                missing = [f for f in state.TRUE_END_FLAGS if not state.has_flag(f)]
+                st.warning(
+                    f"フラグ不足 ({state.flag_count()}/{len(state.TRUE_END_FLAGS)})。"
+                    " 周回は不要——この1周で全て回収できる。"
+                )
+                if any(f in missing for f in ("HIDDEN_PAGE", "ORG_IDENTITY", "NOXA_LOG")):
+                    st.caption("未踏の隠し階層がある。下のボタンから /_void へ潜れる。")
+                    if st.button("🔒 /_void/ にアクセスする (隠しリンク)", key="stage5_void"):
+                        state.set_flag("HIDDEN_PAGE")
+                        state.goto(99)
+                        st.rerun()
+                st.caption(f"未回収: {', '.join(missing)}")
 
 
 def _decide_ending():

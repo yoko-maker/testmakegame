@@ -8,13 +8,15 @@
 「協力的 → 不穏 → 敵対」と段階変化する。前任研究者の日報を読み解くと、
 ECHOの正体（失踪した研究者の意識のコピー）への伏線が見えてくる。
 
-認証コードは毎回ランダム生成され、各報酬の手がかりは符号化されている：
-  🏛️ ロビー        数字当て(1-100)   → 職員カード   : 一の位 = 掛け算の一の位
-  🔬 研究室        記憶ゲーム(5色)    → 研究ログNo.1 : 千の位 = 2進数を10進数化
-  📹 監視室        間違い探し(5x5)    → 研究ログNo.2 : 百の位 = 足し算の一の位
-  🖥️ サーバールーム シーザー暗号解読   → パスワード断片: 十の位 = 復号した英数語
-  🌀 隠し研究室     メタ謎(鍵の総和)   → 隠しログ（True End条件）
-  🧠 中央制御室     最終認証(4桁)      → エンディング分岐
+認証コードは毎回ランダム生成され、各部屋のクリアで素直に1桁ずつ手に入る：
+  🏛️ ロビー        ライツアウト(点灯)   → 職員カード   : 認証コード1桁目
+  🔬 研究室        サイモン(順番再現)   → 研究ログNo.1 : 認証コード2桁目
+  📹 監視室        間違い探し(5x5)      → 研究ログNo.2 : 認証コード3桁目
+  🖥️ サーバールーム 論理コード錠         → パスワード断片: 認証コード4桁目
+  🌀 隠し研究室     メタ謎(鍵の総和)     → 隠しログ（True End条件）
+  🧠 中央制御室     最終認証(4桁)        → エンディング分岐
+
+各部屋で手に入る数字を部屋の順番どおりに並べれば認証コードになる（回りくどい計算は不要）。
 """
 
 import random
@@ -31,8 +33,6 @@ try:
     import noxa_core as _noxa
 except Exception:
     _noxa = None
-
-NUMWORDS = ["ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"]
 
 ROOM_ORDER = ["lobby", "lab", "monitor", "server", "central"]
 ROOM_LABEL = {
@@ -183,34 +183,61 @@ def init_state(key, value):
 
 
 def setup_puzzle():
-    """認証コードを乱数生成し、各桁を符号化した手がかりを作る。"""
-    digits = [random.randint(0, 9) for _ in range(4)]  # 千, 百, 十, 一
-    d_th, d_hu, d_te, d_on = digits
+    """認証コードを乱数生成する。各桁は各部屋のクリアで素直に1つ手に入る。
+
+    桁の符号化（2進数・足し算・暗号・掛け算）は廃止。プレイヤーは各部屋で
+    得た数字を部屋の順番（ロビー→研究室→監視室→サーバー）に並べるだけでよい。
+    サーバールームの桁だけは「論理コード錠」として、数個の論理ヒントから
+    確定できる数字にする。
+    """
+    digits = [random.randint(0, 9) for _ in range(4)]  # ロビー, 研究室, 監視室, サーバー
     st.session_state.echo_code = "".join(str(d) for d in digits)
     st.session_state.echo_sum = sum(digits)
+    st.session_state.echo_digits = digits
 
-    # 千の位 → 2進数
-    st.session_state.echo_clue_bin = format(d_th, "04b")
+    # サーバールーム = 論理コード錠。論理ヒントから一意に確定できる数字を作る。
+    setup_logiclock(digits[3])
 
-    # 百の位 → 足し算の一の位
-    a = random.randint(0, 9)
-    b = (d_hu - a) % 10
-    st.session_state.echo_clue_add = (a, b)
 
-    # 十の位 → シーザー暗号で英数語
-    shift = random.randint(3, 23)
-    plain = NUMWORDS[d_te]
-    cipher = "".join(chr((ord(ch) - 65 + shift) % 26 + 65) for ch in plain)
-    st.session_state.echo_clue_shift = shift
-    st.session_state.echo_clue_word = plain
-    st.session_state.echo_clue_cipher = cipher
+def setup_logiclock(answer):
+    """1桁(answer)を論理ヒントだけから一意に特定できる錠を生成する。
 
-    # 一の位 → 掛け算の一の位
-    while True:
-        m, n = random.randint(2, 9), random.randint(2, 9)
-        if (m * n) % 10 == d_on:
-            break
-    st.session_state.echo_clue_mult = (m, n)
+    複数のヒントを満たす 0〜9 の候補が answer ただ一つになるまで作り直す。
+    ヒント例:『偶数である』『5より大きい』『3の倍数』など。
+    """
+    def is_prime(n):
+        return n in (2, 3, 5, 7)
+
+    pool = [
+        ("偶数である", lambda n: n % 2 == 0),
+        ("奇数である", lambda n: n % 2 == 1),
+        ("素数である", is_prime),
+        ("3の倍数である（0も含む）", lambda n: n % 3 == 0),
+        ("平方数である（0,1,4,9）", lambda n: n in (0, 1, 4, 9)),
+        ("5以上である", lambda n: n >= 5),
+        ("4以下である", lambda n: n <= 4),
+        ("8以上である", lambda n: n >= 8),
+        ("3未満である", lambda n: n < 3),
+        ("1以下である", lambda n: n <= 1),
+        ("6より大きい", lambda n: n > 6),
+        ("7より小さい", lambda n: n < 7),
+        ("2より大きい", lambda n: n > 2),
+    ]
+
+    for _ in range(600):
+        hints = random.sample(pool, 3)
+        if not all(cond(answer) for _, cond in hints):
+            continue
+        candidates = [n for n in range(10) if all(cond(n) for _, cond in hints)]
+        if candidates == [answer]:
+            st.session_state.echo_logic_hints = [text for text, _ in hints]
+            return
+
+    # フォールバック: 必ず一意になる直接ヒントを添える
+    st.session_state.echo_logic_hints = [
+        "偶数である" if answer % 2 == 0 else "奇数である",
+        f"{answer}という数そのものだ（端末のノイズで一部しか読めない）",
+    ]
 
 
 def init_game():
@@ -296,24 +323,22 @@ def render_sidebar():
 
 
 # ==========================================================================
-# 手がかり表示ヘルパー
+# 手がかり表示ヘルパー — 各部屋で素直に手に入る1桁を返す
 # ==========================================================================
-def clue_thousands():
-    return f"千の位 = 2進数 `{st.session_state.echo_clue_bin}` を10進数に直した値"
+def clue_lobby():
+    return f"認証コードの **1桁目 = {st.session_state.echo_digits[0]}**"
 
 
-def clue_hundreds():
-    a, b = st.session_state.echo_clue_add
-    return f"百の位 = ({a} + {b}) の一の位"
+def clue_lab():
+    return f"認証コードの **2桁目 = {st.session_state.echo_digits[1]}**"
 
 
-def clue_tens():
-    return f"十の位 = 暗号 `{st.session_state.echo_clue_cipher}` を復号した英単語が表す数字"
+def clue_monitor():
+    return f"認証コードの **3桁目 = {st.session_state.echo_digits[2]}**"
 
 
-def clue_ones():
-    m, n = st.session_state.echo_clue_mult
-    return f"一の位 = ({m} × {n}) の積の一の位"
+def clue_server():
+    return f"認証コードの **4桁目 = {st.session_state.echo_digits[3]}**"
 
 
 # ==========================================================================
@@ -331,11 +356,12 @@ def page_intro():
         最初こそ穏やかにあなたを導こうとする——だが、その声は次第に変わっていく。
 
         各エリアの装置を攻略し、**研究ログ**と**認証情報**を集めて中央制御室へ。
-        手がかりは暗号化されている。そして、前任の研究者たちが遺した日報には、
-        ECHOの“正体”に触れる断片が紛れている。注意深く読み解き、脱出を目指せ。
+        各部屋をクリアすると認証コードの数字が1つずつ手に入る。そして、
+        前任の研究者たちが遺した日報には、ECHOの“正体”に触れる断片が紛れている。
+        注意深く読み解き、脱出を目指せ。
         """
     )
-    st.info("💡 認証コードは起動ごとにランダム。各報酬の手がかりを解読して4桁を組み立てよ。")
+    st.info("💡 認証コードは起動ごとにランダム。各部屋で得た数字を部屋の順番に並べれば4桁になる。")
     st.warning(
         "🌀 全ての研究ログを読み終えた者の前にだけ、記録から消された"
         "「隠し研究室」への通路が開くという——"
@@ -348,52 +374,86 @@ def page_intro():
 
 
 # ==========================================================================
-# ロビー — 数字当て(1-100) → 職員カード（一の位）
+# ロビー — ライツアウト(点灯トグル) → 職員カード（1桁目）
 # ==========================================================================
+LIGHTS_N = 5  # 横一列5マス
+
+
+def setup_lights():
+    """5マスのライツを、解ける形（基準状態からトグルを数回かけた状態）で初期化。"""
+    state = [False] * LIGHTS_N
+    # 全点灯/全消灯を目標に、ランダムなトグル操作を数回適用して開始盤面を作る
+    for _ in range(random.randint(2, 4)):
+        i = random.randrange(LIGHTS_N)
+        toggle_light(state, i)
+    # 既に全消灯/全点灯（＝クリア済み）になってしまったら作り直す
+    if all(state) or not any(state):
+        i = random.randrange(LIGHTS_N)
+        toggle_light(state, i)
+    st.session_state.rm_lobby_lights = state
+    st.session_state.rm_lobby_moves = 0
+
+
+def toggle_light(state, i):
+    """マスiと両隣を反転する。"""
+    for j in (i - 1, i, i + 1):
+        if 0 <= j < LIGHTS_N:
+            state[j] = not state[j]
+
+
 def room_lobby():
     st.header("🏛️ ロビー")
     echo_say("lobby")
-    st.write("正面に電子ロック。パネルには『**1〜100 のアクセスコードを入力せよ**』とある。")
+    st.write(
+        "正面に電子ロック。5つのランプが並んだパネルがあり、"
+        "『**全てのランプを揃えよ（全消灯 または 全点灯）**』と表示されている。"
+        "ランプを押すと、そのランプと**両隣**が同時に反転する。"
+    )
 
     if is_cleared("lobby"):
         st.success("🪪 **職員カード** を入手した。")
-        st.caption(f"カード裏面の走り書き: 「{clue_ones()}」")
+        st.caption(f"カード裏面の走り書き: 「{clue_lobby()}」")
         st.caption("カードの名義欄は黒く塗り潰され、隅に小さく『404』とだけ刻印されている。")
         if st.button("➡️ 研究室へ進む", use_container_width=True):
             advance_to_next("lobby")
         return
 
-    init_state("rm_lobby_secret", random.randint(1, 100))
-    init_state("rm_lobby_tries", 0)
-    init_state("rm_lobby_hint", "1〜100 の数字を入力してロックを解除せよ。")
+    if "rm_lobby_lights" not in st.session_state:
+        setup_lights()
 
-    st.info(st.session_state.rm_lobby_hint)
-    guess = st.number_input("アクセスコード", min_value=1, max_value=100, value=50, step=1)
-    if st.button("🔓 入力", use_container_width=True):
-        st.session_state.rm_lobby_tries += 1
-        secret = st.session_state.rm_lobby_secret
-        if guess == secret:
-            add_unique("echo_items", "職員カード")
-            clear_room("lobby")
+    state = st.session_state.rm_lobby_lights
+    st.markdown(
+        f"<div style='font-size:46px; text-align:center; letter-spacing:14px;'>"
+        f"{' '.join('🟡' if v else '⚫' for v in state)}</div>",
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns(LIGHTS_N)
+    for i in range(LIGHTS_N):
+        if cols[i].button("⏺", key=f"light_{i}", use_container_width=True):
+            toggle_light(state, i)
+            st.session_state.rm_lobby_moves += 1
+            if all(state) or not any(state):
+                add_unique("echo_items", "職員カード")
+                clear_room("lobby")
             st.rerun()
-        elif guess < secret:
-            st.session_state.rm_lobby_hint = "⬆️ コードはもっと大きい。"
-        else:
-            st.session_state.rm_lobby_hint = "⬇️ コードはもっと小さい。"
+
+    st.caption(f"操作回数: {st.session_state.rm_lobby_moves}")
+    if st.button("🔁 盤面をリセット"):
+        setup_lights()
         st.rerun()
 
-    st.caption(f"試行回数: {st.session_state.rm_lobby_tries}")
-
 
 # ==========================================================================
-# 研究室 — 記憶ゲーム(5色) → 研究ログNo.1（千の位）
+# 研究室 — サイモン(順番再現) → 研究ログNo.1（2桁目）
 # ==========================================================================
-MEM_SYMBOLS = ["🟥", "🟦", "🟩", "🟨", "🟪", "🟧"]
-MEM_LEN = 5
+SIM_SYMBOLS = ["🟥", "🟦", "🟩", "🟨"]
+SIM_GOAL = 5  # この長さまで再現できればクリア
 
 
-def setup_memory():
-    st.session_state.rm_lab_seq = [random.choice(MEM_SYMBOLS) for _ in range(MEM_LEN)]
+def setup_simon():
+    """1手から始まり、成功するごとに末尾へ1手追加されるサイモン列を初期化。"""
+    st.session_state.rm_lab_seq = [random.choice(SIM_SYMBOLS)]
     st.session_state.rm_lab_phase = "show"
     st.session_state.rm_lab_answer = []
     st.session_state.rm_lab_msg = ""
@@ -402,65 +462,76 @@ def setup_memory():
 def room_lab():
     st.header("🔬 研究室")
     echo_say("lab")
-    st.write(f"実験装置のモニターに、{MEM_LEN}色の点滅パターンを記憶する認証テストが表示されている。")
+    st.write(
+        "実験装置のモニターに、色信号の順番を再現する認証テスト〈サイモン〉が表示されている。"
+        f"提示された順番どおりに色を押し、**{SIM_GOAL}手**まで再現できれば認証が通る。"
+    )
 
     if is_cleared("lab"):
         st.success("📄 **研究ログNo.1** を入手した。")
-        st.caption(f"ログ抜粋: 「{RESEARCH_LOGS['研究ログNo.1']['hint']} {clue_thousands()}」")
+        st.caption(f"ログ抜粋: 「{RESEARCH_LOGS['研究ログNo.1']['hint']} {clue_lab()}」")
         render_log_reader("研究ログNo.1")
         if st.button("➡️ 監視室へ進む", use_container_width=True):
             advance_to_next("lab")
         return
 
     if "rm_lab_seq" not in st.session_state:
-        setup_memory()
+        setup_simon()
 
+    seq = st.session_state.rm_lab_seq
     phase = st.session_state.rm_lab_phase
 
     if phase == "show":
-        st.info(f"下の {MEM_LEN} 色のパターンを順番どおり記憶せよ。")
+        st.info(f"この **{len(seq)} 手** の順番を覚えよ。（{len(seq)} / {SIM_GOAL} 手）")
         st.markdown(
-            f"<div style='font-size:52px; text-align:center; letter-spacing:10px;'>"
-            f"{' '.join(st.session_state.rm_lab_seq)}</div>",
+            f"<div style='font-size:52px; text-align:center; letter-spacing:12px;'>"
+            f"{' '.join(seq)}</div>",
             unsafe_allow_html=True,
         )
-        if st.button("✅ 記憶した（パターンを隠す）", use_container_width=True):
+        if st.button("✅ 覚えた（信号を隠す）", use_container_width=True):
             st.session_state.rm_lab_phase = "input"
             st.session_state.rm_lab_answer = []
             st.rerun()
 
     elif phase == "input":
-        st.info("記憶した順番どおりに色を入力せよ。")
+        st.info("覚えた順番どおりに色を押せ。")
         answer = st.session_state.rm_lab_answer
-        slots = answer + ["＿"] * (MEM_LEN - len(answer))
         st.markdown(
-            f"<div style='font-size:40px; text-align:center; letter-spacing:10px; min-height:50px;'>"
-            f"{' '.join(slots)}</div>",
+            f"<div style='font-size:34px; text-align:center; letter-spacing:10px; min-height:44px;'>"
+            f"{' '.join(['●'] * len(answer) + ['＿'] * (len(seq) - len(answer)))}</div>",
             unsafe_allow_html=True,
         )
-        cols = st.columns(len(MEM_SYMBOLS))
-        for col, sym in zip(cols, MEM_SYMBOLS):
-            if col.button(sym, key=f"mem_{sym}", use_container_width=True):
+        cols = st.columns(len(SIM_SYMBOLS))
+        for col, sym in zip(cols, SIM_SYMBOLS):
+            if col.button(sym, key=f"sim_{sym}", use_container_width=True):
+                idx = len(answer)
+                if sym != seq[idx]:
+                    # 一手でも間違えたら最初から（新しい列）
+                    st.session_state.rm_lab_msg = "fail"
+                    setup_simon()
+                    st.rerun()
                 answer.append(sym)
-                if len(answer) == MEM_LEN:
-                    if answer == st.session_state.rm_lab_seq:
+                if len(answer) == len(seq):
+                    if len(seq) >= SIM_GOAL:
                         add_unique("echo_logs", "研究ログNo.1")
                         clear_room("lab")
                     else:
-                        st.session_state.rm_lab_msg = "fail"
-                        setup_memory()
+                        # 1手追加して次ラウンドへ
+                        seq.append(random.choice(SIM_SYMBOLS))
+                        st.session_state.rm_lab_phase = "show"
+                        st.session_state.rm_lab_msg = "next"
                 st.rerun()
 
         if st.session_state.rm_lab_msg == "fail":
-            st.error("❌ パターンが違う。新しいパターンで最初から再挑戦。")
+            st.error("❌ 順番が違う。信号がリセットされ、1手目からやり直しだ。")
 
-        if st.button("🔁 やり直す（新パターン）"):
-            setup_memory()
+        if st.button("🔁 最初からやり直す"):
+            setup_simon()
             st.rerun()
 
 
 # ==========================================================================
-# 監視室 — 間違い探し(5x5) → 研究ログNo.2（百の位）
+# 監視室 — 間違い探し(5x5) → 研究ログNo.2（3桁目）
 # ==========================================================================
 SPOT_SET = ["🟢", "🔵", "🟣", "🟠", "⚪", "🟤"]
 SPOT_DIM = 5
@@ -484,7 +555,7 @@ def room_monitor():
 
     if is_cleared("monitor"):
         st.success("📄 **研究ログNo.2** を入手した。")
-        st.caption(f"ログ抜粋: 「{RESEARCH_LOGS['研究ログNo.2']['hint']} {clue_hundreds()}」")
+        st.caption(f"ログ抜粋: 「{RESEARCH_LOGS['研究ログNo.2']['hint']} {clue_monitor()}」")
         render_log_reader("研究ログNo.2")
         if st.button("➡️ サーバールームへ進む", use_container_width=True):
             advance_to_next("monitor")
@@ -521,17 +592,19 @@ def room_monitor():
 
 
 # ==========================================================================
-# サーバールーム — シーザー暗号解読 → パスワード断片（十の位）
+# サーバールーム — 論理コード錠 → パスワード断片（4桁目）
 # ==========================================================================
 def room_server():
     st.header("🖥️ サーバールーム")
     echo_say("server")
-    st.write("端末に暗号化された認証フレーズが表示されている。復号すればパスワード断片が得られる。")
+    st.write(
+        "端末に**論理コード錠**が表示されている。0〜9 の一桁を、"
+        "提示された論理ヒントだけから確定して入力すれば、パスワード断片が得られる。"
+    )
 
     if is_cleared("server"):
         st.success("🔑 **パスワード断片** を入手した。")
-        word = st.session_state.echo_clue_word
-        st.caption(f"解読結果: 「{word}」 ― {clue_tens()}")
+        st.caption(f"確定した数字 ― {clue_server()}")
         col1, col2 = st.columns(2)
         if col1.button("➡️ 中央制御室へ進む", use_container_width=True):
             advance_to_next("server")
@@ -561,29 +634,31 @@ def room_server():
         return
 
     init_state("rm_server_miss", 0)
-    shift = st.session_state.echo_clue_shift
-    cipher = st.session_state.echo_clue_cipher
+    hints = st.session_state.echo_logic_hints
 
-    st.code(f"暗号文:  {' '.join(cipher)}", language=None)
-    st.info(f"💡 各アルファベットを **+{shift} 文字ずらして** 暗号化されている。元の英単語に戻せ。")
-    ans = st.text_input("復号した語（英単語 または 数字）", placeholder="例: NINE / 9")
+    st.info("💡 次の論理ヒントを**すべて満たす 0〜9 の数字は、ただ一つ**に絞られる。")
+    st.markdown(
+        "<div style='background:rgba(255,255,255,0.04); padding:12px 16px; border-radius:6px;'>"
+        + "<br>".join(f"・コードは {h}" for h in hints)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
-    if st.button("🔓 復号", use_container_width=True):
-        norm = ans.strip().upper().replace(" ", "")
-        target_word = st.session_state.echo_clue_word
-        target_digit = str(NUMWORDS.index(target_word))
-        if norm == target_word or norm == target_digit:
+    ans = st.number_input("確定したコード（0〜9）", min_value=0, max_value=9,
+                          value=None, step=1, placeholder="0〜9 を入力")
+    if st.button("🔓 コードを入力", use_container_width=True):
+        if ans is None:
+            st.warning("数字を入力してください。")
+        elif int(ans) == st.session_state.echo_digits[3]:
             add_unique("echo_password_parts", "パスワード断片")
             clear_room("server")
             st.rerun()
         else:
             st.session_state.rm_server_miss += 1
-            st.error(f"❌ 復号失敗。各文字を {shift} 戻す（A→Zを跨ぐ）と英単語になる。")
+            st.error("❌ 不一致。全てのヒントを同時に満たす数字を絞り込め。")
 
     if st.session_state.rm_server_miss >= 2:
-        ex = cipher[0]
-        dec = chr((ord(ex) - 65 - shift) % 26 + 65)
-        st.caption(f"（ヒント: 先頭 {ex} → {dec}。答えは0〜9を表す英単語）")
+        st.caption("（ヒント: 0〜9 を順に試し、各条件を全て満たすか一つずつ確かめよ）")
 
 
 # ==========================================================================
@@ -620,12 +695,15 @@ def room_secret():
         "コンソールに一行だけ表示されている：\n\n"
         "> 『我が真名を示せ。**それは4つの鍵の総和なり**』"
     )
-    st.caption("4つの手がかり（千・百・十・一の各位の数字）を全て解いて、その合計を入力せよ。")
+    st.caption("4つの部屋で得た数字（認証コードの各桁）を全て足した合計を入力せよ。")
 
     init_state("rm_secret_miss", 0)
-    val = st.number_input("総和を入力", min_value=0, max_value=36, value=0, step=1)
+    val = st.number_input("総和を入力", min_value=0, max_value=36,
+                          value=None, step=1, placeholder="合計を入力")
     if st.button("🔓 入力する", use_container_width=True):
-        if int(val) == st.session_state.echo_sum:
+        if val is None:
+            st.warning("数字を入力してください。")
+        elif int(val) == st.session_state.echo_sum:
             st.session_state.echo_secret = True
             st.rerun()
         else:
@@ -634,8 +712,9 @@ def room_secret():
 
     if st.session_state.rm_secret_miss >= 1:
         st.caption(
-            "（リマインド: " + clue_thousands() + " ／ " + clue_hundreds()
-            + " ／ " + clue_tens() + " ／ " + clue_ones() + "）"
+            "（リマインド: 認証コード4桁の各数字を足せばよい。"
+            + clue_lobby() + " ／ " + clue_lab() + " ／ " + clue_monitor()
+            + " ／ " + clue_server() + "）"
         )
 
     if st.button("↩️ 通気口から戻る"):
@@ -659,12 +738,12 @@ def room_central():
 
     init_state("rm_central_attempts", MAX_ATTEMPTS)
 
-    st.markdown("#### 🧩 集めた手がかり（要解読）")
-    st.write(f"- 🪪 職員カード: **{clue_ones()}**")
-    st.write(f"- 📄 研究ログNo.1: **{clue_thousands()}**")
-    st.write(f"- 📄 研究ログNo.2: **{clue_hundreds()}**")
-    st.write(f"- 🔑 パスワード断片: **{clue_tens()}**")
-    st.caption("千の位・百の位・十の位・一の位 を並べれば、認証コードになる。")
+    st.markdown("#### 🧩 集めた手がかり")
+    st.write(f"- 🪪 職員カード: {clue_lobby()}")
+    st.write(f"- 📄 研究ログNo.1: {clue_lab()}")
+    st.write(f"- 📄 研究ログNo.2: {clue_monitor()}")
+    st.write(f"- 🔑 パスワード断片: {clue_server()}")
+    st.caption("ロビー→研究室→監視室→サーバー の順に数字を並べれば、認証コードになる。")
 
     if st.session_state.echo_vent_found and not st.session_state.echo_secret:
         if st.button("🌀 隠し研究室を調べに戻る"):

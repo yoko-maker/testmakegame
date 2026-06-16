@@ -302,16 +302,20 @@ def view_calc():
     prob = st.session_state.mg_calc[idx]
     st.progress(idx / 3, text=f"問題 {idx + 1} / 3")
     st.subheader(f"{prob['text']} = ?")
-    val = st.number_input("答え", value=0, step=1, key=f"calc_in_{idx}")
+    val = st.number_input("答え", value=None, step=1, key=f"calc_in_{idx}",
+                          placeholder="答えを入力")
     if st.button("⚙️ 入力", use_container_width=True):
-        if int(val) == prob["ans"]:
-            st.session_state.mg_calc_idx += 1
-            if st.session_state.mg_calc_idx >= 3:
-                st.session_state.lz_power = True
-            st.session_state.mg_calc_msg = ""
+        if val is None:
+            st.warning("答えを入力してください。")
         else:
-            st.session_state.mg_calc_msg = "miss"
-        st.rerun()
+            if int(val) == prob["ans"]:
+                st.session_state.mg_calc_idx += 1
+                if st.session_state.mg_calc_idx >= 3:
+                    st.session_state.lz_power = True
+                st.session_state.mg_calc_msg = ""
+            else:
+                st.session_state.mg_calc_msg = "miss"
+            st.rerun()
 
     if st.session_state.mg_calc_msg == "miss":
         st.error("❌ 計算ミス。慎重に！（時間は刻々と過ぎている）")
@@ -377,30 +381,53 @@ def view_type():
 
 
 # ==========================================================================
-# 研究所 — 科学クイズ
+# 研究所 — 数列予測（隕石の軌道予測）
 # ==========================================================================
-SCI_QUIZ = [
-    {"q": "隕石が大気圏に突入して光る現象は？", "choices": ["流星", "オーロラ", "虹", "雷"], "answer": 0},
-    {"q": "隕石に多く含まれる金属は？", "choices": ["アルミ", "鉄", "金", "銅"], "answer": 1},
-    {"q": "恐竜絶滅の一因とされる巨大衝突が起きた場所は？",
-     "choices": ["サハラ砂漠", "ユカタン半島", "シベリア", "アマゾン"], "answer": 1},
-    {"q": "NOXA研究機構の解析班が隕石内部から検出した、組織内コード『ECHO』と一致する痕跡とは？",
-     "choices": ["規則的な信号パターン", "ただの放射線", "水の結晶", "金の粒子"], "answer": 0},
-]
+SEQ_LEN = 3  # 解析率100%に必要な連続正解数
 
 
-def setup_quiz():
-    st.session_state.mg_quiz_idx = 0
-    st.session_state.mg_quiz_correct = 0
-    st.session_state.mg_quiz_answered = False
-    st.session_state.mg_quiz_fail = False
+def gen_seq():
+    """隕石の軌道観測値を模した数列を生成し、次の値を当てさせる。
+
+    等差・等比・階差（二次）の3パターンからランダムに選ぶ。
+    返り値: {"shown": 表示する数列, "ans": 次の値, "rule": 規則名}
+    """
+    kind = random.choice(["arith", "geo", "diff"])
+    if kind == "arith":
+        start = random.randint(1, 12)
+        step = random.randint(2, 9)
+        vals = [start + step * i for i in range(5)]
+        rule = f"等差（公差 {step}）"
+    elif kind == "geo":
+        start = random.randint(1, 4)
+        ratio = random.randint(2, 3)
+        vals = [start * ratio ** i for i in range(5)]
+        rule = f"等比（公比 {ratio}）"
+    else:  # 階差が等差になる二次数列
+        a0 = random.randint(1, 8)
+        d0 = random.randint(1, 5)
+        dd = random.randint(1, 4)
+        vals = [a0]
+        d = d0
+        for _ in range(5):
+            vals.append(vals[-1] + d)
+            d += dd
+        vals = vals[:6]
+        rule = f"階差が一定ずつ増える（二次）"
+    return {"shown": vals[:-1], "ans": vals[-1], "rule": rule}
+
+
+def setup_seq():
+    st.session_state.mg_seq = [gen_seq() for _ in range(SEQ_LEN)]
+    st.session_state.mg_seq_idx = 0
+    st.session_state.mg_seq_msg = ""
 
 
 def view_quiz():
     render_hud()
     st.markdown("---")
-    st.header("🔬 研究所 ― 科学クイズ")
-    st.caption("隕石に関する設問に全問正解し、解析率を高めよ。")
+    st.header("🔬 研究所 ― 隕石の軌道予測")
+    st.caption("観測された軌道データ列の『次の値』を読み、隕石の進路を予測して解析率を高めよ。")
     facility_voice("lz_analysis")
     st.caption("📁 解析端末の片隅に、古い研究ログのタイトルが残っている── "
                "『ECHO-404: 被験者の意識同期記録（破棄予定）』。今は気に留めている時間はない。")
@@ -413,42 +440,37 @@ def view_quiz():
             goto("hub")
         return
 
-    if "mg_quiz_idx" not in st.session_state:
-        setup_quiz()
+    if "mg_seq" not in st.session_state:
+        setup_seq()
 
-    idx = st.session_state.mg_quiz_idx
-    item = SCI_QUIZ[idx]
-    st.progress(idx / len(SCI_QUIZ), text=f"第 {idx + 1} 問 / {len(SCI_QUIZ)}")
-    st.subheader(item["q"])
-
-    if not st.session_state.mg_quiz_answered:
-        for i, ch in enumerate(item["choices"]):
-            if st.button(ch, key=f"sq_{idx}_{i}", use_container_width=True):
-                st.session_state.mg_quiz_answered = True
-                st.session_state.mg_quiz_last = (i == item["answer"])
-                if st.session_state.mg_quiz_last:
-                    st.session_state.mg_quiz_correct += 1
-                st.rerun()
-    else:
-        if st.session_state.mg_quiz_last:
-            st.success("⭕ 正解！")
+    idx = st.session_state.mg_seq_idx
+    prob = st.session_state.mg_seq[idx]
+    st.progress(idx / SEQ_LEN, text=f"観測データ {idx + 1} / {SEQ_LEN}")
+    seq_text = "　,　".join(str(v) for v in prob["shown"]) + "　,　 ？"
+    st.markdown(
+        f"<div style='font-size:34px; text-align:center; letter-spacing:2px; "
+        f"font-family:monospace;'>{seq_text}</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("軌道観測値の規則を見抜き、次に来る値を入力せよ。")
+    val = st.number_input("次の値", value=None, step=1, key=f"seq_in_{idx}",
+                          placeholder="次に来る値を入力")
+    if st.button("🛰️ 予測を確定", use_container_width=True):
+        if val is None:
+            st.warning("次の値を入力してください。")
         else:
-            st.error(f"❌ 不正解… 正解は「{item['choices'][item['answer']]}」")
-        last = idx + 1 == len(SCI_QUIZ)
-        if st.button("結果" if last else "次へ", key=f"sq_next_{idx}"):
-            st.session_state.mg_quiz_answered = False
-            if last:
-                if st.session_state.mg_quiz_correct == len(SCI_QUIZ):
+            if int(val) == prob["ans"]:
+                st.session_state.mg_seq_idx += 1
+                if st.session_state.mg_seq_idx >= SEQ_LEN:
                     st.session_state.lz_analysis = True
-                else:
-                    setup_quiz()
-                    st.session_state.mg_quiz_fail = True
+                st.session_state.mg_seq_msg = ""
             else:
-                st.session_state.mg_quiz_idx += 1
+                st.session_state.mg_seq_msg = f"miss:{prob['rule']}:{prob['ans']}"
             st.rerun()
 
-    if st.session_state.get("mg_quiz_fail"):
-        st.warning("⚠️ 全問正解が必要だ。最初からやり直し。")
+    if st.session_state.mg_seq_msg.startswith("miss"):
+        _, rule, ans = st.session_state.mg_seq_msg.split(":", 2)
+        st.error(f"❌ 予測がずれた。軌道を見失えば迎撃は不可能だ。（規則: {rule} / 正しい値: {ans}）")
 
     if st.session_state.lz_analysis:
         st.balloons()

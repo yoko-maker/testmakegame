@@ -197,6 +197,7 @@ def _new_room(seed: int) -> dict:
         "misses": 0,
         "p1_joined": False,
         "p2_joined": False,
+        "solo": False,
         "stamp": {"p1": None, "p2": None},  # (text, timestamp)
         "hidden_log": False,
         "ending": None,
@@ -207,7 +208,7 @@ def _make_code() -> str:
     return "".join(random.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(4))
 
 
-def create_room() -> str:
+def create_room(solo: bool = False) -> str:
     store = get_store()
     with store["lock"]:
         code = _make_code()
@@ -215,6 +216,10 @@ def create_room() -> str:
             code = _make_code()
         room = _new_room(random.randint(1, 999999))
         room["p1_joined"] = True
+        if solo:
+            # ソロモード: 1セッションで P1/P2 両方を操作するため両者を接続済みにする
+            room["p2_joined"] = True
+            room["solo"] = True
         store["rooms"][code] = room
     return code
 
@@ -293,6 +298,7 @@ def restart_room(code: str):
             p1, p2 = room["p1_joined"], room["p2_joined"]
             fresh = _new_room(seed)
             fresh["p1_joined"], fresh["p2_joined"] = p1, p2
+            fresh["solo"] = room.get("solo", False)
             store["rooms"][code] = fresh
 
 
@@ -401,7 +407,7 @@ def app_rerun():
 
 
 def leave_room():
-    for k in ("pl_code", "pl_role", "pl_seen_stage"):
+    for k in ("pl_code", "pl_role", "pl_seen_stage", "pl_solo"):
         st.session_state.pop(k, None)
 
 
@@ -455,6 +461,36 @@ def live_sync(code: str, role: str):
                     unsafe_allow_html=True)
 
 
+def solo_header(code: str, role: str, room: dict) -> str:
+    """ソロモードのヘッダ。P1/P2 を切り替えるトグルを出し、操作中ロールを返す。"""
+    stg = room["stage"]
+    st.markdown(
+        f"ROOM **{code}** <span style='opacity:0.7'>(ソロ)</span> ／ 安定度 "
+        f"**{room['stability']}%**", unsafe_allow_html=True)
+    st.progress(room["stability"] / 100)
+
+    labels = {
+        "p1": "P1 ・ 内側/研究者（端末α）",
+        "p2": "P2 ・ 外側/救助（端末β）",
+    }
+    opts = ["p1", "p2"]
+    idx = opts.index(role) if role in opts else 0
+    picked = st.radio(
+        "いま操作している端末", opts, index=idx, horizontal=True,
+        format_func=lambda r: ("✅ " if room["solved"][stg][r] else "")
+        + labels[r], key=f"solo_role_{stg}")
+    if picked != role:
+        st.session_state.pl_role = picked
+        app_rerun()
+
+    done = {r: room["solved"][stg][r] for r in opts}
+    st.caption(
+        "ソロ進行: 両方の端末を自分で操作して解く。"
+        f"このステージ → P1 {'✅' if done['p1'] else '⌛'} ／ "
+        f"P2 {'✅' if done['p2'] else '⌛'}。両方そろうと次へ進む。")
+    return picked
+
+
 @st.fragment(run_every=2)
 def poll_change(code: str):
     """エンディング/失敗画面で、相手のルーム再起動などのステージ変化に追従する。"""
@@ -498,6 +534,20 @@ def answer_block(code: str, role: str, stage: int, expected: str, label: str,
                  placeholder: str = ""):
     room = room_snapshot(code)
     if room["solved"][stage][role]:
+        if st.session_state.get("pl_solo"):
+            # ソロ: 相手待ちはなく、もう片方の端末を操作するよう促す
+            partner = other(role)
+            st.success("✅ 認証成功 — この端末のパートはクリア。")
+            if not room["solved"][stage][partner]:
+                st.markdown(f"**もう片方の端末（{role_tag(partner)}）"
+                            "に切り替えて、残りのパートを解こう。**",
+                            unsafe_allow_html=True)
+                if st.button(f"▶ {('P2・外側' if partner=='p2' else 'P1・内側')}"
+                             "の端末に切り替える",
+                             key=f"swap_{stage}_{role}", use_container_width=True):
+                    st.session_state.pl_role = partner
+                    app_rerun()
+            return
         waiting_view(code, role, stage)
         return
     key = f"in_{stage}_{role}"
@@ -784,6 +834,26 @@ def lobby():
             f"{ROLE_DESC['p2'][0]}</span><br>{ROLE_DESC['p2'][1]}</div>",
             unsafe_allow_html=True)
 
+    st.markdown("### 遊び方を選ぶ")
+    mode = st.radio(
+        "プレイモード",
+        ["👥 2人で遊ぶ（別端末で協力）", "🧑 ソロで遊ぶ（1人で両パートを操作）"],
+        key="pl_lobby_mode", label_visibility="collapsed")
+
+    if mode.startswith("🧑"):
+        # --- ソロモード ---
+        st.info("ソロモード: 1人で P1（内側）と P2（外側）の両方の情報を見ながら、"
+                "両方の答えを入力して最後まで進められる。相手の接続を待つ必要はない。"
+                "画面上部のトグルで『いまどちらの端末を操作しているか』を切り替えよう。")
+        if st.button("ソロで開始する", type="primary", use_container_width=True):
+            code = create_room(solo=True)
+            st.session_state.pl_code = code
+            st.session_state.pl_role = "p1"      # 起点ロール（トグルで切替）
+            st.session_state.pl_solo = True
+            app_rerun()
+        return
+
+    # --- 2人プレイモード（従来どおり） ---
     st.info("遊び方: 取り残された側(P1)が『ルームを作成』→ 4文字のコードを救助側に共有 → "
             "救助オペレーター(P2)が別端末から『ルームに参加』。2人揃うと開始。")
 
@@ -794,6 +864,7 @@ def lobby():
             code = create_room()
             st.session_state.pl_code = code
             st.session_state.pl_role = "p1"
+            st.session_state.pl_solo = False
             app_rerun()
     with c2:
         st.markdown("#### 🔑 ルームに参加 (P2 ─ 救助オペレーター)")
@@ -805,6 +876,7 @@ def lobby():
             if res == "p2":
                 st.session_state.pl_code = code
                 st.session_state.pl_role = "p2"
+                st.session_state.pl_solo = False
                 app_rerun()
             elif res == "full":
                 st.error("そのルームは既に2人埋まっている。")
@@ -839,7 +911,8 @@ def sidebar():
         code = st.session_state.get("pl_code")
         if code:
             st.markdown("### 🔒 PAIR LOCK")
-            st.markdown(f"ROOM **{code}**")
+            solo = st.session_state.get("pl_solo")
+            st.markdown(f"ROOM **{code}**" + ("（ソロ）" if solo else ""))
             st.markdown(role_tag(st.session_state.get("pl_role", "p1")),
                         unsafe_allow_html=True)
             st.divider()
@@ -874,6 +947,9 @@ def main():
             app_rerun()
         return
 
+    # ソロ状態を共有ストアと同期（再読み込み時の保険）
+    st.session_state.pl_solo = bool(room.get("solo"))
+
     # 相手の参加待ち
     if not (room["p1_joined"] and room["p2_joined"]):
         waiting_for_join(code, role)
@@ -893,7 +969,10 @@ def main():
 
     # 通常: ステージ進行
     st.session_state.pl_seen_stage = room["stage"]
-    live_sync(code, role)
+    if room.get("solo"):
+        role = solo_header(code, role, room)
+    else:
+        live_sync(code, role)
     st.divider()
     pz = build_puzzle(room["seed"])
     # 直前ステージ突破後の無線会話を挟む（真相を小出しに）

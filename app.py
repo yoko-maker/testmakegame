@@ -280,6 +280,23 @@ def home():
     st.markdown("---")
 
     unlocked = noxa.unlocked_games()
+
+    # 新規解放のお知らせ（前作クリアで作品が解放された瞬間に出す）
+    seen = s.setdefault("seen_unlocks", [])
+    announced = False
+    for g in GAMES:
+        if g["key"] in unlocked and g["key"] not in noxa.INITIAL_UNLOCKED \
+                and g["key"] not in seen:
+            st.success(f"🔓 新たな作品が解放された ── 「{g['title']}」")
+            seen.append(g["key"])
+            announced = True
+    if noxa.project000_unlocked() and "project000" not in seen:
+        st.success("🔓 最終作品 **Project 000** が解放された。")
+        seen.append("project000")
+        announced = True
+    if announced:
+        noxa.save()
+
     for g in GAMES:
         is_unlocked = g["key"] in unlocked
         cleared = noxa.is_cleared(g["key"])
@@ -302,10 +319,12 @@ def home():
                 with c2:
                     st.subheader("？？？")
                     src = UNLOCK_SOURCE.get(g["key"])
-                    if src:
+                    # 解放条件は「その前作が既に解放されている」場合のみ提示し、
+                    # 先のチェーンをいきなり全部ネタバレしない。
+                    if src and src in unlocked:
                         st.caption(f"「{noxa.GAME_TITLES.get(src, '前作')}」をクリアすると解放")
                     else:
-                        st.caption("未解放")
+                        st.caption("？？？")
                     st.write("ロックされた作品。")
 
     # 最終作品 Project 000（全作品クリアで解放）
