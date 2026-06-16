@@ -7,6 +7,12 @@ import streamlit as st
 
 from game import audio, endings, stages, state, style
 
+# NOXA Universe（ポータル統合時のみ利用可能 / 単体起動では import 失敗を無視）
+try:
+    import noxa_core as _noxa
+except Exception:
+    _noxa = None
+
 try:
     st.set_page_config(
         page_title="404_User_Not_Found",
@@ -115,6 +121,8 @@ ROUTES = {
 
 def main():
     sidebar()
+    if _noxa:
+        _noxa.render_intrusion("arg")
     stage = st.session_state.stage
     if stage == 0:
         title_screen()

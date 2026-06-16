@@ -854,6 +854,9 @@ def page_ending():
 init_game()
 render_sidebar()
 
+if _noxa:
+    _noxa.render_intrusion("echo")
+
 if st.session_state.echo_ending is not None:
     page_ending()
 elif not st.session_state.echo_started:

@@ -853,6 +853,9 @@ def page_ending():
 init_game()
 render_sidebar()
 
+if _noxa:
+    _noxa.render_intrusion("case001")
+
 if st.session_state.case_ending is not None:
     page_ending()
 elif not st.session_state.case_started:

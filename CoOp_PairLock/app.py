@@ -749,6 +749,11 @@ def ending_screen(code, role):
     ending = room["ending"]
     if _noxa and ending in ("true", "secret", "normal"):
         _noxa.report_clear("pairlock")
+        # ソロで突破したか（Project000で「協力なしで突破」の引用に使う）
+        try:
+            _noxa.set_choice("pairlock_solo", bool(room.get("solo")))
+        except Exception:
+            pass
 
     # 共通: 認証コードが「誰」だったのかを回収する
     st.markdown(
@@ -933,6 +938,9 @@ def sidebar():
 def main():
     st.markdown(CSS, unsafe_allow_html=True)
     sidebar()
+
+    if _noxa:
+        _noxa.render_intrusion("pairlock")
 
     code = st.session_state.get("pl_code")
     role = st.session_state.get("pl_role")

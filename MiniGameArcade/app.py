@@ -945,4 +945,8 @@ st.sidebar.caption(f"👤 {st.session_state.player_name}")
 if choice != "🏠 ホーム":
     unlock("first_play")
 
+# 作品間干渉・赤い女の侵食（ポータル統合時のみ）
+if _noxa:
+    _noxa.render_intrusion("arcade")
+
 PAGES[choice]()

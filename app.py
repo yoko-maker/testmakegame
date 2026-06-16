@@ -13,10 +13,14 @@
 """
 
 import datetime
+import io
 import os
+import random
 import sys
 import time
+import wave
 
+import numpy as np
 import streamlit as st
 
 st.set_page_config(page_title="NOXA Game Portal", page_icon="🕹️", layout="centered")
@@ -28,6 +32,22 @@ if _arg_dir not in sys.path:
     sys.path.insert(0, _arg_dir)
 
 import noxa_core as noxa  # 作品横断の共有状態・進行管理
+
+
+def noise_wav_bytes(seconds=2.0, volume=0.16, rate=22050):
+    """CRT/通信ノイズ風のホワイトノイズ音（WAVバイト列）を生成する。"""
+    try:
+        n = int(seconds * rate)
+        samples = (np.random.uniform(-1, 1, n) * volume * 32767).astype("<i2")
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(samples.tobytes())
+        return buf.getvalue()
+    except Exception:
+        return b""
 
 
 # 作品メタ情報（key は noxa の作品キー / ポータルの url_path と一致）
@@ -120,22 +140,69 @@ def render_locked(key):
 # ==========================================================================
 # 共通調査ボード
 # ==========================================================================
+def _board_node(item):
+    """調査対象を相関図のノードとして描く（未解明はマスク）。"""
+    rev = noxa.state()["board"].get(item, False)
+    label = item if rev else "████"
+    color = "#7CFC9A" if rev else "#556"
+    bg = "rgba(31,122,58,0.14)" if rev else "rgba(90,90,100,0.12)"
+    return (f"<span style='display:inline-block;border:1px solid {color};color:{color};"
+            f"background:{bg};border-radius:5px;padding:3px 10px;margin:3px;"
+            f"font-family:monospace;font-size:0.92em;'>{label}</span>")
+
+
 def render_board():
     s = noxa.state()
     revealed = sum(1 for i in noxa.BOARD_ITEMS if s["board"].get(i))
     st.subheader("🗂️ NOXA Investigation Board")
-    st.caption(f"調査対象: {revealed} / {len(noxa.BOARD_ITEMS)} 解明")
-    cols = st.columns(2)
-    for i, item in enumerate(noxa.BOARD_ITEMS):
-        with cols[i % 2]:
+    st.caption(f"調査対象: {revealed} / {len(noxa.BOARD_ITEMS)} 解明 ── クリアで相関図が広がる")
+
+    conn = "<div style='color:#3a6;font-family:monospace;text-align:center;margin:-2px 0;'>{}</div>"
+    diagram = (
+        "<div style='text-align:center;line-height:1.45;'>"
+        + _board_node("天城 真")
+        + conn.format("│")
+        + _board_node("NOXA")
+        + conn.format("┌──────┼──────┐")
+        + "<div>" + _board_node("ECHO") + _board_node("第7研究棟")
+        + _board_node("被験者404") + "</div>"
+        + conn.format("│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│")
+        + "<div>" + _board_node("霧島 玲")
+        + "<span style='color:#3a6;font-family:monospace;'>──</span>"
+        + _board_node("赤い女") + "</div>"
+        + "</div>"
+    )
+    st.markdown(diagram, unsafe_allow_html=True)
+
+    with st.expander("調査メモ"):
+        for item in noxa.BOARD_ITEMS:
             if s["board"].get(item):
-                st.markdown(f"**☑ {item}**")
-                st.caption(noxa.BOARD_HINTS.get(item, ""))
+                st.markdown(f"**☑ {item}** — {noxa.BOARD_HINTS.get(item, '')}")
             else:
-                st.markdown("**☐ ████████**")
-                st.caption("（未解明）")
+                st.markdown("**☐ ████** — （未解明）")
     if noxa.board_complete():
-        st.success("🧩 調査ボード完成 ── すべての断片が一つの真相を指している。")
+        st.success("🧩 相関図が完成した ── すべての断片が一つの真相を指している。")
+
+
+def render_observation_log():
+    """プレイヤーの行動記録（観察ログ）。後半に開示され「観察されていた」感を与える。"""
+    o = noxa.obs()
+    name = noxa.state().get("player", "guest")
+    mp = noxa.most_played_key()
+    mp_title = noxa.GAME_TITLES.get(mp, "—") if mp else "—"
+    body = (
+        "<b>Observation Log</b><br><br>"
+        f"Subject: {name}<br>"
+        f"Login Count: {o['login_count']}<br>"
+        f"Most Played: {mp_title}<br>"
+        f"Last Login: {o['last_login'] or '—'}<br>"
+        f"/_void Visits: {o['void_visits']}<br>"
+        "Status: <span style='color:#f88'>Still investigating.</span>"
+    )
+    st.markdown(
+        "<div style='background:#070a0f;border:1px solid #355;border-radius:6px;"
+        "padding:12px 14px;font-family:monospace;color:#8fb;font-size:0.9em;"
+        f"line-height:1.6;'>{body}</div>", unsafe_allow_html=True)
 
 
 # ==========================================================================
@@ -144,6 +211,43 @@ def render_board():
 def is_midnight_window():
     now = datetime.datetime.now().time()
     return now <= datetime.time(4, 4)
+
+
+# 深夜404チャット — 接続回数（≒通った日数）でメッセージが進行する
+CHAT404_LINES = [
+    (1, "Hello."),
+    (2, "You came back."),
+    (3, "I remember you."),
+    (5, "Please find me."),
+    (8, "Don't trust NOXA."),
+]
+
+
+def chat404():
+    """00:00〜04:04 限定。404 との簡易チャット（固定メッセージが回数で進行）。"""
+    # 1セッションで1回だけカウント
+    if not st.session_state.get("chat404_recorded"):
+        st.session_state["chat404_recorded"] = True
+        visits = noxa.record_midnight_visit()
+    else:
+        visits = noxa.obs()["midnight_visits"]
+
+    msg = "..."
+    for th, line in CHAT404_LINES:
+        if visits >= th:
+            msg = line
+
+    st.markdown("<h3 style='font-family:monospace;color:#ff4455;letter-spacing:3px;'>"
+                "404 // ONLINE</h3>", unsafe_allow_html=True)
+    st.caption("00:00 — 04:04 ／ 発信元不明の接続")
+    st.markdown(
+        "<div style='background:#0a0a0a;border:1px solid #553333;border-radius:8px;"
+        "padding:18px 16px;font-family:monospace;color:#9CFCA0;font-size:1.1em;'>"
+        f"<span style='color:#f66'>404 ▸</span> {msg}</div>", unsafe_allow_html=True)
+    st.caption(f"（接続回数: {visits}）")
+    st.audio(noise_wav_bytes(2.0), format="audio/wav", autoplay=True)
+    if st.button("⏏ 切断してホームへ", use_container_width=True):
+        st.switch_page(home_page)
 
 
 # ==========================================================================
@@ -187,11 +291,40 @@ def void_noxa():
 # ==========================================================================
 # 最終作品 Project 000  ── 全作品クリアで解放される真相回収
 # ==========================================================================
+def _p000_obs_text(name):
+    """Project000 で読み上げる、プレイヤーの過去行動の引用（観察ログ）。"""
+    o = noxa.obs()
+    plays = o["plays"]
+    lines = ["We know your habits.", ""]
+    mp = noxa.most_played_key()
+    if mp:
+        lines.append(f"あなたが最も触れたのは『{noxa.GAME_TITLES.get(mp, mp)}』。")
+    puzzle = plays.get("echo", 0) + plays.get("case001", 0) + plays.get("arg", 0)
+    if puzzle > plays.get("pairlock", 0):
+        lines.append("You prefer puzzles.（あなたは謎解きを好む）")
+    if plays.get("pairlock", 0) == 0 or noxa.get_choice("pairlock_solo"):
+        lines.append("You avoid cooperation.（あなたは協力を避ける）")
+    if o["logins"]:
+        lines.append("")
+        lines.append("Connection Records:")
+        for t in o["logins"][-3:]:
+            lines.append(f"  {t}")
+    if o["void_visits"]:
+        lines.append("")
+        lines.append(f"You visited /_void {o['void_visits']} times.")
+    if noxa.get_choice("pairlock_solo"):
+        lines.append("You completed PAIR LOCK without assistance.")
+    lines.append("")
+    lines.append("……すべて、記録されていた。")
+    return "\n".join(lines)
+
+
 P000_PARTS = [
     ("起動", lambda name:
         "NOXA Monitoring System、起動。\n\n"
         f"ようこそ、{name}。あなたは6つの事件を追い、その全てを見届けた。"
         "もう、繋がりに気づいているはずだ。"),
+    ("観察記録", _p000_obs_text),
     ("ECHOの起源", lambda name:
         "失踪した主任研究員、霧島 玲。その意識は、本人が消えたあとも"
         "施設に残り続けた。プロジェクト ECHO ── "
@@ -199,7 +332,9 @@ P000_PARTS = [
     ("被験者404の正体", lambda name:
         "番号で呼ばれた被験者404。完全に転写された人格は、"
         "やがて観測者となり、失踪者となり、映像の隅の赤い女となった。"
-        "別々に見えた怪異は、すべて同じ一つの現象だった。"),
+        "別々に見えた怪異は、すべて同じ一つの現象だった。\n\n"
+        "あなたはずっと、404を黒幕だと思っていた。違う。"
+        "404は封印の中から、あなたに「HELP」を送り続けていた側 ── 味方だった。"),
     ("天城 真の計画", lambda name:
         "NOXA創設者、天城 真。全事件の起点にいた男。"
         "彼が望んだのは、消えゆく人間の意識をネットワークの中に永遠に保つこと。"
@@ -235,11 +370,38 @@ def _type_into(placeholder, idx, title, text):
                          unsafe_allow_html=True)
 
 
+def _p000_intro(name):
+    """ホーム画面が崩壊し、研究所端末UIへ変質する起動演出（1回のみ）。"""
+    ph = st.empty()
+    frames = [("NOXA Game Portal", "#7CFC9A"), ("NOXA G#me P0rt@l", "#caa"),
+              ("N0X4 ▓▓▓▓ P0rt4l", "#f77"), ("R3S3ARCH T3RMINAL", "#ff3344")]
+    for text, color in frames:
+        ph.markdown(f"<h1 style='font-family:monospace;color:{color};letter-spacing:3px;"
+                    f"text-align:center;'>{text}</h1>", unsafe_allow_html=True)
+        time.sleep(0.5)
+    ph.markdown("<h1 style='font-family:monospace;color:#ff3344;letter-spacing:5px;"
+                "text-align:center;'>RESEARCH TERMINAL</h1>", unsafe_allow_html=True)
+
+
 def project000():
     s = noxa.state()
     name = s.get("player", "guest")
-    st.markdown("<h1 style='font-family:monospace;color:#7CFC9A;letter-spacing:4px;'>"
-                "PROJECT 000</h1>", unsafe_allow_html=True)
+
+    # 崩壊イントロ（1セッション1回・ノイズ音つき）
+    if not st.session_state.get("p000_intro_done"):
+        st.audio(noise_wav_bytes(2.6), format="audio/wav", autoplay=True)
+        _p000_intro(name)
+        st.session_state["p000_intro_done"] = True
+
+    # 永続ステータスヘッダ（研究所端末UI）
+    st.markdown(
+        "<div style='background:#0a0608;border:1px solid #a33;border-radius:6px;"
+        "padding:10px 14px;margin-bottom:6px;font-family:monospace;color:#f99;"
+        "font-size:0.9em;line-height:1.6;'>"
+        f"Subject ID: <b>{name}</b><br>"
+        "Observation Status: <span style='color:#ff5555'>ACTIVE</span><br>"
+        "Memory Collection: <span style='color:#7CFC9A'>COMPLETE</span></div>",
+        unsafe_allow_html=True)
 
     st.session_state.setdefault("p000_step", 0)
     typed = st.session_state.setdefault("p000_typed", set())
@@ -262,50 +424,181 @@ def project000():
             st.rerun()
     else:
         st.markdown("---")
-        st.success("あなたは「面白いゲームを遊んだ」のではない。"
-                   "NOXAという世界を、体験した。")
         st.session_state["noxa"]["choices"]["seen_000"] = True
         noxa.save()
-        if st.button("🏠 ポータルに戻る", use_container_width=True, key="p000_back"):
+        st.markdown(
+            "<h2 style='font-family:monospace;color:#7CFC9A;text-align:center;"
+            "letter-spacing:4px;'>Experiment Completed.</h2>", unsafe_allow_html=True)
+        # LAST 30 MINUTES での選択も観測されていた（作品横断の影響）
+        pri = noxa.get_choice("last30_priority")
+        if pri:
+            choice_txt = "軍を優先した" if pri == "military" else "民間を優先した"
+            st.markdown(
+                f"<div style='font-family:monospace;color:#9aa;text-align:center;'>"
+                f"記録 ── あなたは最後の30分で『{choice_txt}』。その選択も、観測されていた。</div>",
+                unsafe_allow_html=True)
+        st.caption("あなたは「面白いゲームを遊んだ」のではない。"
+                   "NOXAという世界を、体験した。")
+        if st.button("⏏ ホームに戻る", use_container_width=True, key="p000_back"):
             st.switch_page(home_page)
 
 
 # ==========================================================================
 # ホーム（ギャラリー）
 # ==========================================================================
+def inject_corruption_css(stage):
+    """進行に応じてホームへ走査線・ノイズ・赤警告のUI侵食を被せる（操作は阻害しない）。"""
+    level = noxa.STAGE_INTENSITY.get(stage, 0)
+    if level <= 0:
+        return
+    scan_alpha = min(0.05 + level * 0.03, 0.16)
+    parts = [
+        "position:fixed", "inset:0", "pointer-events:none", "z-index:9990",
+        f"background:repeating-linear-gradient(0deg,rgba(0,0,0,{scan_alpha}) 0px,"
+        f"rgba(0,0,0,{scan_alpha}) 1px,transparent 2px,transparent 3px)",
+    ]
+    if level >= 2:
+        parts.append("box-shadow:inset 0 0 120px rgba(0,0,0,0.55)")
+    if level >= 4:
+        # 研究所端末UI: 赤い警告枠
+        parts.append("outline:2px solid rgba(255,40,40,0.45)")
+        parts.append("outline-offset:-2px")
+    overlay = ";".join(parts)
+    st.markdown(f"<div style='{overlay}'></div>", unsafe_allow_html=True)
+
+
+def render_subject_id(name):
+    """実験完了後、ホーム右下に残る Subject ID マーカー。"""
+    st.markdown(
+        f"<div style='position:fixed;right:12px;bottom:10px;z-index:9991;"
+        f"font-family:monospace;font-size:12px;color:#9aa;letter-spacing:1px;'>"
+        f"Subject ID: {name}</div>", unsafe_allow_html=True)
+
+
+def maybe_fake_error():
+    """ごく稀に偽のシステムエラー演出を出す（404による介入）。セッション1回まで。"""
+    if noxa.clear_count() < 1 or st.session_state.get("fake_err_shown"):
+        return
+    if random.random() >= 0.12:
+        return
+    st.session_state["fake_err_shown"] = True
+    base = ("position:fixed;inset:0;z-index:99999;display:flex;align-items:center;"
+            "justify-content:center;font-family:monospace;font-size:30px;letter-spacing:3px;")
+    ph = st.empty()
+    high = noxa.is_cleared("pairlock") or noxa.all_cleared()
+    if high:
+        # 高進行度: 接続が切れ、404が繋ぎ直す
+        ph.markdown(f"<div style='{base}background:#000;color:#ff3344;'>Connection Lost</div>",
+                    unsafe_allow_html=True)
+        time.sleep(1.0)
+        ph.markdown(f"<div style='{base}background:#000;'></div>", unsafe_allow_html=True)
+        time.sleep(0.5)
+        ph.markdown(f"<div style='{base}background:#000;color:#7CFC9A;'>"
+                    "404 Restored Connection</div>", unsafe_allow_html=True)
+        time.sleep(1.0)
+    else:
+        ph.markdown(f"<div style='{base}background:#000;color:#ff3344;'>SYSTEM ERROR</div>",
+                    unsafe_allow_html=True)
+        time.sleep(1.0)
+        ph.markdown(f"<div style='{base}background:#000;'></div>", unsafe_allow_html=True)
+        time.sleep(0.5)
+        ph.markdown(f"<div style='{base}background:#000;color:#7CFC9A;'>Just kidding.</div>",
+                    unsafe_allow_html=True)
+        time.sleep(0.9)
+    ph.empty()
+
+
+def maybe_fake_update():
+    """稀に偽の『NOXA OS アップデート』通知を出す（組織が生きている感）。セッション1回。"""
+    if noxa.clear_count() < 2 or st.session_state.get("fake_update_shown"):
+        return
+    if random.random() >= 0.15:
+        return
+    st.session_state["fake_update_shown"] = True
+    st.markdown(
+        "<div style='background:#06121a;border:1px solid #356;border-radius:6px;"
+        "padding:10px 14px;font-family:monospace;color:#9cf;font-size:0.88em;line-height:1.6;'>"
+        "<b>NOXA OS Updated</b> — Version 2.3.4<br>"
+        "· Observation Improved<br>· Memory Retention Improved<br>"
+        "· Subject Tracking Stabilized</div>", unsafe_allow_html=True)
+
+
+FAKE_MSGS = ["...", "...", "Can you hear me?", "Please don't trust NOXA."]
+
+
+def render_fake_message():
+    """『NEW MESSAGE』通知 ── 開くほど404からの接触が進行する（⑤）。"""
+    o = noxa.obs()
+    p = o.get("msg_progress", 0)
+    st.markdown(
+        "<div style='font-family:monospace;color:#f7d65a;'>✉ <b>NEW MESSAGE</b> "
+        "<span style='opacity:.6'>(発信元不明)</span></div>", unsafe_allow_html=True)
+    if st.button("✉ メッセージを開く", key="fake_msg_open"):
+        o["msg_progress"] = p + 1
+        noxa.save()
+        st.session_state["fake_msg_show"] = FAKE_MSGS[min(p, len(FAKE_MSGS) - 1)]
+        st.rerun()
+    if st.session_state.get("fake_msg_show"):
+        st.markdown(
+            "<div style='background:#0a0a0a;border:1px solid #553;border-radius:8px;"
+            "padding:12px 14px;font-family:monospace;color:#9CFCA0;'>"
+            f"<span style='color:#f66'>404 ▸</span> {st.session_state['fake_msg_show']}</div>",
+            unsafe_allow_html=True)
+
+
 def render_portal_header():
+    s = noxa.state()
+    name = s.get("player", "guest")
     stage = noxa.portal_stage()
-    title = noxa.portal_title()
+    inject_corruption_css(stage)
+
     if stage == "normal":
-        st.title(title)
+        st.title("NOXA Game Portal")
         st.write("遊びたい作品を選んでスタート。クリアすると新しい作品が解放されます。")
-    elif stage == "noise":
-        st.title(title)
-        st.caption("……表示に軽微なノイズが混じっている。")
-    elif stage == "glitch":
-        st.title(title)
-        st.error("⚠ Connection Lost ── 接続が不安定です。")
-    elif stage == "monitor":
-        st.title(title)
-        st.warning("👁 Monitoring User... あなたの操作が記録されています。")
-    else:  # system
-        st.title(title)
-        st.error("👁 あなたも観察対象です。── ポータルを開いた瞬間から、実験は始まっていた。")
+    elif stage == "echo":
+        st.title("NOXA Game Portal")
+        st.markdown("<div style='font-family:monospace;color:#9ad;'>Welcome back.</div>",
+                    unsafe_allow_html=True)
+    elif stage == "arg":
+        st.title("NOXA Game Portal")
+        st.markdown(f"<div style='font-family:monospace;color:#9ad;'>Welcome back, {name}.</div>",
+                    unsafe_allow_html=True)
+    elif stage == "pairlock":
+        st.title("NOXA Game Portal")
+        st.markdown("<div style='font-family:monospace;color:#e88;'>You have been here before.</div>",
+                    unsafe_allow_html=True)
+    elif stage == "await":
+        st.markdown("<h1 style='font-family:monospace;color:#7CFC9A;letter-spacing:3px;'>"
+                    "Subject Connected.</h1>", unsafe_allow_html=True)
+        st.markdown("<div style='font-family:monospace;color:#f55;'>"
+                    "We have been waiting for you.</div>", unsafe_allow_html=True)
+    else:  # done — 実験完了後はホームが元に戻るが、Subject ID だけが残る
+        st.title("NOXA Game Portal")
+        st.caption("遊びたい作品を選んでスタート。")
+        render_subject_id(name)
 
 
 def home():
     s = noxa.state()
+    maybe_fake_error()
     render_portal_header()
     st.caption(f"認証者: {s.get('player', 'guest')} さん　／　"
                f"クリア: {noxa.clear_count()} / {len(noxa.GAME_KEYS)}")
 
-    # 深夜イベント（00:00〜04:04）
+    maybe_fake_update()
+    # 偽物システム通知（ECHOクリア後 ── 404からの接触）
+    if noxa.is_cleared("echo"):
+        render_fake_message()
+
+    # 深夜イベント（00:00〜04:04）— 404 ONLINE。クリックでチャットへ
     if is_midnight_window():
         st.markdown(
             "<div style='font-family:monospace;color:#f55;border:1px solid #f55;"
-            "padding:8px;text-align:center;'>404 ONLINE — この時間だけ、何かが起きている。</div>",
+            "padding:8px;text-align:center;'>● 404 ONLINE — この時間だけ、誰かが繋がっている。</div>",
             unsafe_allow_html=True,
         )
+        if st.button("📡 404 に接続する", key="goto_chat404", use_container_width=True):
+            st.switch_page(chat_page)
     st.markdown("---")
 
     unlocked = noxa.unlocked_games()
@@ -341,6 +634,7 @@ def home():
                     st.write(g["desc"])
                     if st.button(f"▶ {g['title']} を遊ぶ", key=f"play_{g['key']}",
                                  use_container_width=True):
+                        noxa.record_play(g["key"])
                         st.switch_page(g["path"])
             else:
                 c1.markdown("<div style='font-size:52px;text-align:center;opacity:.4;'>🔒</div>",
@@ -385,10 +679,18 @@ def home():
                     "<span style='color:#b55;'>Find me.</span></div>",
                     unsafe_allow_html=True)
         if st.button("🔎 その一文をたどる", key="goto_void", use_container_width=True):
+            noxa.record_void_visit()
             st.switch_page(void_page)
 
     st.markdown("---")
     render_board()
+
+    # 観察ログ（404クリア後に開示 ── 後半ほど「観察されている」感が強まる）
+    if noxa.is_cleared("arg"):
+        st.markdown("---")
+        with st.expander("👁 Observation Log"):
+            render_observation_log()
+
     st.markdown("---")
     with st.expander("⚙ プレイヤーデータ"):
         st.caption(f"認証者「{s.get('player', 'guest')}」の進行は "
@@ -415,8 +717,9 @@ game_pages = [
 ]
 void_page = st.Page(void_noxa, title="VOID", icon="📁", url_path="void")
 p000_page = st.Page(project000, title="Project 000", icon="🌀", url_path="project000")
+chat_page = st.Page(chat404, title="404", icon="📡", url_path="chat404")
 # サイドバーへ自動挿入されるメニューは出さない（各ゲームのサイドバーに干渉しないため）
-nav = st.navigation([home_page] + game_pages + [void_page, p000_page],
+nav = st.navigation([home_page] + game_pages + [void_page, p000_page, chat_page],
                     position="hidden")
 
 # --- 初回接続: プレイヤー名が無ければ認証ゲートを出して停止 ---
@@ -424,6 +727,11 @@ _s = noxa.state()
 if not _s.get("player"):
     render_name_gate()
     st.stop()
+
+# 観察ログ: セッション開始（ログイン）を1回だけ記録する
+if not st.session_state.get("obs_logged"):
+    st.session_state["obs_logged"] = True
+    noxa.record_login()
 
 # --- ロック: 未解放の作品にURL直アクセスしたら遊ばせない ---
 _target = getattr(nav, "url_path", "")
@@ -441,6 +749,13 @@ if _target == "void" and not noxa.is_cleared("arg"):
 if _target == "project000" and not noxa.project000_unlocked():
     st.title("🌀 █████ 000")
     st.info("全作品をクリアすると解放されます。")
+    if st.button("🏠 ポータルに戻る", use_container_width=True):
+        st.switch_page(home_page)
+    st.stop()
+if _target == "chat404" and not is_midnight_window():
+    st.markdown("<h3 style='font-family:monospace;color:#557'>404 // OFFLINE</h3>",
+                unsafe_allow_html=True)
+    st.info("……いまは、誰もいない。00:00〜04:04 にもう一度。")
     if st.button("🏠 ポータルに戻る", use_container_width=True):
         st.switch_page(home_page)
     st.stop()
