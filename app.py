@@ -312,6 +312,121 @@ def render_observation_log():
 
 
 # ==========================================================================
+# 深度拡張: 「NOXAが常に動いている」演出（ホーム）
+# ==========================================================================
+def render_persist_message():
+    """⑨(置換) 累計ゲーム起動回数で進むパーソナルメッセージ。"""
+    msg = noxa.persist_message()
+    if msg:
+        st.markdown(
+            f"<div style='text-align:center;font-family:monospace;color:#caa;"
+            f"opacity:0.85;margin:2px 0 6px;'>{msg}</div>", unsafe_allow_html=True)
+
+
+def render_ambient_event():
+    """② 観測不能イベント / ⑥ ランダム会話盗聴。セッション1回だけ抽選（ちらつき防止）。"""
+    if noxa.clear_count() < 1:
+        return
+    if "_ambient" not in st.session_state:
+        r = random.random()
+        if r < 0.12:
+            st.session_state["_ambient"] = ("missed",
+                noxa.MISSED_EVENTS[random.randrange(len(noxa.MISSED_EVENTS))])
+        elif r < 0.24:
+            st.session_state["_ambient"] = ("audio",
+                noxa.CONVO_FRAGMENTS[random.randrange(len(noxa.CONVO_FRAGMENTS))])
+        else:
+            st.session_state["_ambient"] = None
+    amb = st.session_state.get("_ambient")
+    if not amb:
+        return
+    kind, data = amb
+    if kind == "missed":
+        t, title, sub = data
+        st.markdown(
+            "<div style='font-family:monospace;border:1px dashed #a55;color:#caa;"
+            "padding:8px 12px;border-radius:4px;margin:4px 0;'>"
+            f"⚠ Event Missed<br>{t} ── {title}<br>"
+            f"<span style='opacity:.6'>{sub}</span></div>", unsafe_allow_html=True)
+    else:
+        lines = "<br>".join(f"<b>{spk}:</b> {txt}" for spk, txt in data)
+        st.markdown(
+            "<div style='font-family:monospace;border-left:3px solid #577;color:#9bb;"
+            "padding:6px 12px;background:rgba(20,30,40,0.4);margin:4px 0;'>"
+            f"🎧 [Audio Fragment]<br>{lines}</div>", unsafe_allow_html=True)
+
+
+def render_phantom_file():
+    """⑪ 存在しないファイル memo_404.txt。初日は File Not Found、別の日に開くと HELP。"""
+    if noxa.clear_count() < 2:
+        return
+    ch = noxa.state()["choices"]
+    if not ch.get("phantom_seen"):
+        if random.random() >= 0.10:
+            return
+        ch["phantom_seen"] = True
+        noxa.save()
+    today = noxa.today_str()
+    with st.expander("🗂 memo_404.txt"):
+        first = ch.get("phantom_date")
+        if not first:
+            ch["phantom_date"] = today
+            noxa.save()
+            st.error("File Not Found")
+            st.caption("……また別の日に開いてみると、何か変わるかもしれない。")
+        elif first != today:
+            st.markdown("<div style='font-family:monospace;color:#ff4444;font-size:1.5rem;"
+                        "letter-spacing:4px;'>HELP</div>", unsafe_allow_html=True)
+            st.caption("昨日は開けなかったファイルが、今日は開いた。")
+        else:
+            st.error("File Not Found")
+            st.caption("……まだ開かない。別の日に。")
+
+
+def render_noxa_feed():
+    """① 活動ログ ＋ ④ タイムライン ＋ ⑤ 名簿 ＋ ③ 消された記録 ＋ ⑧ Observer。"""
+    with st.expander("📡 NOXA INTERNAL FEED"):
+        feed = "<br>".join(
+            f"<span style='color:#6a9'>[LOG]</span> {l}" for l in noxa.feed_lines())
+        st.markdown(f"<div style='font-family:monospace;font-size:0.85rem;color:#9bb;'>"
+                    f"{feed}</div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.caption("🕰 NOXA TIMELINE")
+        for year, ev, unlocked in noxa.timeline_rows():
+            color = "#cdb" if unlocked else "#667"
+            st.markdown(f"<div style='font-family:monospace;color:{color};'>"
+                        f"{year} ── {ev}</div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.caption("👥 消えた職員名簿")
+        for nm, stt in noxa.roster_rows():
+            st.markdown(f"<div style='font-family:monospace;'>{nm} "
+                        f"<span style='color:#c77'>{stt}</span></div>",
+                        unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.caption("🗑 消された記録")
+        if noxa.erased_recovered():
+            st.markdown("<div style='font-family:monospace;color:#cdb;'>Recovered Fragment:<br>"
+                        "<i>There was another subject.</i><br>"
+                        "<span style='opacity:.6'>……詳細は不明。</span></div>",
+                        unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='font-family:monospace;color:#955;'>"
+                        "██████████ — <b>ACCESS DENIED</b></div>", unsafe_allow_html=True)
+
+        if noxa.observer_unlocked():
+            st.markdown("---")
+            st.markdown("<div style='font-family:monospace;color:#f99;'>"
+                        "👁 Observer — <b>Unknown</b><br>"
+                        "<span style='opacity:.6'>NOXAの記録を、さらに上から見ている何か。</span>"
+                        "</div>", unsafe_allow_html=True)
+
+        render_phantom_file()
+
+
+# ==========================================================================
 # 深夜イベント（現実時間連動 00:00〜04:04）
 # ==========================================================================
 def is_midnight_window():
@@ -351,6 +466,19 @@ def chat404():
         "padding:18px 16px;font-family:monospace;color:#9CFCA0;font-size:1.1em;'>"
         f"<span style='color:#f66'>404 ▸</span> {msg}</div>", unsafe_allow_html=True)
     st.caption(f"（接続回数: {visits}）")
+
+    # ⑦ 404の記憶断片（深夜チャットで低確率・セッション1回抽選）
+    if "_chat_frag" not in st.session_state:
+        frags = noxa.MEMORY_FRAGMENTS
+        st.session_state["_chat_frag"] = (
+            frags[random.randrange(len(frags))] if random.random() < 0.45 else None)
+    if st.session_state["_chat_frag"]:
+        st.markdown(
+            "<div style='font-family:monospace;color:#8fbf8f;opacity:0.85;"
+            "margin-top:10px;font-style:italic;'>"
+            f"404 ▸ {st.session_state['_chat_frag']}</div>", unsafe_allow_html=True)
+        st.caption("……誰の記憶だろう。")
+
     st.audio(noise_wav_bytes(2.0), format="audio/wav", autoplay=True)
     if st.button("⏏ 切断してホームへ", use_container_width=True):
         st.switch_page(home_page)
@@ -704,7 +832,9 @@ def home():
     st.caption(f"認証者: {s.get('player', 'guest')} さん　／　"
                f"クリア: {noxa.clear_count()} / {len(noxa.GAME_KEYS)}")
 
+    render_persist_message()   # ⑨(置換) 累計起動回数のパーソナルメッセージ
     maybe_fake_update()
+    render_ambient_event()     # ② 観測不能イベント / ⑥ 会話盗聴（セッション1回抽選）
     # 偽物システム通知（ECHOクリア後 ── 404からの接触）
     if noxa.is_cleared("echo"):
         render_fake_message()
@@ -813,6 +943,10 @@ def home():
 
     st.markdown("---")
     render_board()
+
+    # NOXAが動いている演出（活動ログ・タイムライン・名簿・消された記録・Observer）
+    st.markdown("---")
+    render_noxa_feed()
 
     # 観察ログ（404クリア後に開示 ── 後半ほど「観察されている」感が強まる）
     if noxa.is_cleared("arg"):

@@ -324,6 +324,136 @@ def _intrusion_cinematic(lines):
     ph.empty()
 
 
+# ==========================================================================
+# 深度拡張: 「NOXAが常に動いている」演出のデータ／ロジック
+# ==========================================================================
+def progress_tier():
+    """演出段階: 'early'(0-1) → 'mid'(2-3) → 'late'(4+) → 'post'(Project000完了)。"""
+    if seen_000():
+        return "post"
+    n = clear_count()
+    if n >= 4:
+        return "late"
+    if n >= 2:
+        return "mid"
+    return "early"
+
+
+# ① NOXA活動ログ（進行段階で内容が変わる内部フィード）
+NOXA_FEED = {
+    "early": ["Research Division Updated", "Archive Synced", "Routine Backup Completed"],
+    "mid":   ["Sector 7 Accessed", "Subject 404 Activity Detected", "Memory Index Rebuilt"],
+    "late":  ["Unauthorized Memory Recovery", "Containment Failure", "Subject 404 — location lost"],
+    "post":  ["Observer present", "Experiment ongoing", "Subject ID retained"],
+}
+
+
+def feed_lines():
+    return NOXA_FEED.get(progress_tier(), NOXA_FEED["early"])
+
+
+# ④ NOXAタイムライン (解放しきい値 clear_count, 年, 出来事)
+NOXA_TIMELINE = [
+    (0, "1987", "ノクサ研究機構 設立"),
+    (1, "1994", "第7研究棟 建設"),
+    (2, "2001", "ECHO計画 開始"),
+    (3, "2007", "最初の消失事件"),
+    (4, "2013", "Project 404"),
+    (6, "20XX", "あなたの接続"),
+]
+
+
+def timeline_rows():
+    """(年, 出来事, 解放済みか) のリスト。未解放は伏せる。"""
+    n = clear_count()
+    out = []
+    for thr, year, ev in NOXA_TIMELINE:
+        unlocked = n >= thr or (thr >= 6 and seen_000())
+        out.append((year, ev, True) if unlocked else ("????", "── 未発掘 ──", False))
+    return out
+
+
+# ⑤ 消えた職員名簿 (解放しきい値, 氏名, ステータス)
+STAFF_ROSTER = [
+    (0, "Kirishima Rei", "STATUS UNKNOWN"),
+    (1, "Sakuma",        "RESIGNED?"),
+    (2, "Akira",         "DELETED"),
+    (3, "Yamada S.",     "MISSING"),
+    (4, "██████",        "REMOVED"),
+    (6, "Amagi M.",      "FOUNDER / ACTIVE"),
+]
+
+
+def roster_rows():
+    n = clear_count()
+    return [(nm, stt) for thr, nm, stt in STAFF_ROSTER
+            if n >= thr or (thr >= 6 and seen_000())]
+
+
+# ③ 消された記録 / ⑧ Observer
+def erased_recovered():
+    """消された記録が復元できる段階か（late/post）。"""
+    return progress_tier() in ("late", "post")
+
+
+def observer_unlocked():
+    """⑧ 壁の向こうの観察者（Project000後に解放）。"""
+    return seen_000()
+
+
+# ② 観測不能イベント / ⑥ ランダム会話盗聴（テキスト素材）
+CONVO_FRAGMENTS = [
+    [("A", "Did you hear that?"), ("B", "About 404?"), ("A", "Keep your voice down.")],
+    [("A", "Sector 7 again?"), ("B", "Don't write it down."), ("A", "……")],
+    [("B", "She's still in the system."), ("A", "That's impossible."), ("B", "Is it?")],
+]
+MISSED_EVENTS = [
+    ("03:14", "Unknown Connection", "Data Unavailable"),
+    ("04:04", "Memory Transfer", "Access Logged Elsewhere"),
+    ("02:51", "Subject 404 — Online", "Trace Lost"),
+]
+
+
+# ⑦ 深夜チャットで稀に出る 404 の記憶断片
+MEMORY_FRAGMENTS = [
+    "I remember rain.",
+    "I remember a hospital.",
+    "I remember her voice.",
+    "I remember a door that wouldn't open.",
+    "……was that me?",
+]
+
+
+# ⑨(置換) 累計ゲーム起動回数で進むパーソナルメッセージ
+PERSIST_MSGS = [(6, "You are persistent."),
+                (14, "Why do you keep returning?"),
+                (24, "We knew you would.")]
+
+
+def total_plays():
+    o = obs()
+    try:
+        return sum(o.get("plays", {}).values())
+    except Exception:
+        return 0
+
+
+def persist_message():
+    t = total_plays()
+    msg = None
+    for thr, m in PERSIST_MSGS:
+        if t >= thr:
+            msg = m
+    return msg
+
+
+def today_str():
+    try:
+        return datetime.date.today().isoformat()
+    except Exception:
+        return ""
+
+
 def render_intrusion(game_key):
     """各ゲーム冒頭で呼ぶ。作品間干渉(⑦)と赤い女の侵食(⑥)を描く。
 
