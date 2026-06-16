@@ -44,17 +44,18 @@ CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Chakra+Petch:wght@500;700&display=swap');
 
-/* 意識転写ラボ ── ヴァイオレットの臨床的トーン（PAIR LOCKのティールと差別化） */
+/* 意識転写ラボ ── アンバー（琥珀）の無菌・施設端末トーン。
+   アーケードのネオン(マゼンタ/シアン)とは別系統。グローは抑え、
+   グリッド主体の「臨床的な研究端末」の質感にする。 */
 .stApp {
     background:
-        radial-gradient(circle at 50% -8%, rgba(160,110,255,0.12), transparent 50%),
-        radial-gradient(circle at 90% 110%, rgba(110,70,200,0.07), transparent 55%),
-        #0a0712;
-    color: #c9bce0;
+        radial-gradient(circle at 50% -8%, rgba(255,176,64,0.07), transparent 52%),
+        #0c0a06;
+    color: #ddd0b4;
     font-family: 'Share Tech Mono', monospace;
 }
 
-/* グリッド線オーバーレイ（操作を妨げない） */
+/* グリッド線オーバーレイ（施設の方眼。操作を妨げない） */
 .stApp::before {
     content: "";
     position: fixed;
@@ -62,12 +63,12 @@ CSS = """
     pointer-events: none;
     z-index: 0;
     background-image:
-        linear-gradient(rgba(160,110,255,0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(160,110,255,0.05) 1px, transparent 1px);
-    background-size: 42px 42px;
+        linear-gradient(rgba(255,176,64,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,176,64,0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
 }
 
-/* 走査線（スキャンライン）オーバーレイ + 周辺減光（封じ込め感） */
+/* ごく薄い走査線 + 周辺減光（封じ込め感） */
 .stApp::after {
     content: "";
     position: fixed;
@@ -79,77 +80,81 @@ CSS = """
             to bottom,
             rgba(0,0,0,0) 0px,
             rgba(0,0,0,0) 2px,
-            rgba(24,12,38,0.18) 3px,
+            rgba(40,28,10,0.14) 3px,
             rgba(0,0,0,0) 4px
         ),
-        radial-gradient(circle at 50% 45%, transparent 55%, rgba(0,0,0,0.6) 100%);
+        radial-gradient(circle at 50% 45%, transparent 58%, rgba(0,0,0,0.55) 100%);
 }
 
 /* コンテンツは前面へ */
 .stApp .block-container { position: relative; z-index: 1; }
 
+/* 見出し：無菌ラボの端末ラベル風。グローは控えめ＝ネオン感を出さない */
 h1, h2, h3 {
     font-family: 'Chakra Petch', sans-serif !important;
-    color: #b98cff !important;
+    color: #ffb454 !important;
     letter-spacing: 3px;
     text-transform: uppercase;
-    text-shadow: 0 0 10px rgba(185,140,255,0.5), 0 0 2px rgba(185,140,255,0.85);
+    text-shadow: 0 0 2px rgba(255,176,64,0.45);
 }
-h1 { border-bottom: 1px solid rgba(185,140,255,0.28); padding-bottom: 0.3rem; }
+h1 {
+    border-bottom: 1px solid rgba(255,176,64,0.3);
+    padding-bottom: 0.3rem;
+}
 
-p, li, label, .stMarkdown, .stCaption { color: #b6a8d0 !important; }
+p, li, label, .stMarkdown, .stCaption { color: #cdbf9d !important; }
 
-/* 端末コンソール風ボタン */
+/* 端末コンソール風ボタン（フラットで硬い質感） */
 .stButton > button, .stDownloadButton > button {
-    background: rgba(22,12,36,0.75);
-    color: #c8a6ff;
-    border: 1px solid #7d4fd6;
-    border-radius: 3px;
+    background: rgba(34,24,10,0.8);
+    color: #ffc77a;
+    border: 1px solid #b3781f;
+    border-radius: 2px;
     font-family: 'Share Tech Mono', monospace;
     letter-spacing: 1px;
     text-transform: uppercase;
-    transition: all 0.15s ease;
+    transition: all 0.12s ease;
 }
 .stButton > button:hover, .stDownloadButton > button:hover {
-    background: #b98cff;
-    color: #120820;
-    border-color: #b98cff;
-    box-shadow: 0 0 14px rgba(185,140,255,0.7);
+    background: #ffb454;
+    color: #160f04;
+    border-color: #ffb454;
+    box-shadow: 0 0 10px rgba(255,176,64,0.5);
 }
 .stButton > button:active { transform: translateY(1px); }
 
 /* コマンドライン風入力欄 */
 .stTextInput input, .stNumberInput input, .stTextArea textarea {
-    background: #140a22 !important;
-    color: #c8a6ff !important;
-    border: 1px solid #4a2f7a !important;
-    border-radius: 3px !important;
+    background: #1a1206 !important;
+    color: #ffc77a !important;
+    border: 1px solid #6e4d18 !important;
+    border-radius: 2px !important;
     font-family: 'Share Tech Mono', monospace !important;
     letter-spacing: 2px;
-    caret-color: #b98cff;
+    caret-color: #ffb454;
 }
 .stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
-    border-color: #b98cff !important;
-    box-shadow: 0 0 10px rgba(185,140,255,0.45) !important;
+    border-color: #ffb454 !important;
+    box-shadow: 0 0 8px rgba(255,176,64,0.4) !important;
 }
 
 /* 進捗バー・区切り線・展開パネルもテーマに合わせる */
-.stProgress > div > div > div { background: #b98cff !important; }
-hr { border-color: rgba(125,79,214,0.28) !important; }
+.stProgress > div > div > div { background: #ffb454 !important; }
+hr { border-color: rgba(179,120,31,0.3) !important; }
 [data-testid="stExpander"] {
-    border: 1px solid rgba(125,79,214,0.32) !important;
-    background: rgba(20,10,34,0.55) !important;
-    border-radius: 4px;
+    border: 1px solid rgba(179,120,31,0.32) !important;
+    background: rgba(30,22,8,0.55) !important;
+    border-radius: 3px;
 }
 
 /* サイドバー（施設ステータス端末風） */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0c0718, #160c24) !important;
-    border-right: 1px solid rgba(125,79,214,0.32);
+    background: linear-gradient(180deg, #0e0b05, #1a1206) !important;
+    border-right: 1px solid rgba(179,120,31,0.32);
 }
 
 /* 入力プレースホルダ */
-::placeholder { color: rgba(185,140,255,0.38) !important; }
+::placeholder { color: rgba(255,176,64,0.38) !important; }
 </style>
 """
 

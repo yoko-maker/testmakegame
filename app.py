@@ -156,30 +156,30 @@ _BOARD_EDGES = [
     ("NOXA", "被験者404"), ("ECHO", "霧島 玲"), ("被験者404", "赤い女"),
     ("霧島 玲", "赤い女"),
 ]
-_NODE_H = 30
+_NODE_H = 36
 
 
 def _node_w(item):
-    return max(64, len(item) * 15 + 22)
+    return max(78, len(item) * 17 + 28)
 
 
 def _board_svg():
-    """調査ボードをSVGで描く（ノード・接続線の整列を厳密に保つ）。"""
+    """調査ボードをSVGで描く（暗パネル＋高コントラストで視認性を確保）。"""
     s = noxa.state()
     rects, texts = [], []
     for item, (cx, cy) in _BOARD_NODES.items():
         rev = s["board"].get(item, False)
         w = _node_w(item)
         x, y = cx - w / 2, cy - _NODE_H / 2
-        stroke = "#2ec27a" if rev else "#5a5f6b"
-        fill = "rgba(31,122,58,0.18)" if rev else "rgba(90,90,100,0.10)"
-        tcol = "#7CFC9A" if rev else "#7d828c"
-        label = item if rev else "████"
+        stroke = "#3ee08f" if rev else "#7a8190"
+        fill = "rgba(62,224,143,0.22)" if rev else "rgba(120,128,140,0.14)"
+        tcol = "#b6ffce" if rev else "#aeb4c0"
+        label = item if rev else "????"
         rects.append(
-            f"<rect x='{x:.0f}' y='{y:.0f}' width='{w}' height='{_NODE_H}' rx='5' "
-            f"fill='{fill}' stroke='{stroke}' stroke-width='1.2'/>")
+            f"<rect x='{x:.0f}' y='{y:.0f}' width='{w}' height='{_NODE_H}' rx='6' "
+            f"fill='{fill}' stroke='{stroke}' stroke-width='1.8'/>")
         texts.append(
-            f"<text x='{cx}' y='{cy}' fill='{tcol}' font-size='13' "
+            f"<text x='{cx}' y='{cy}' fill='{tcol}' font-size='16' font-weight='600' "
             f"font-family='monospace' text-anchor='middle' "
             f"dominant-baseline='central'>{label}</text>")
     lines = []
@@ -190,16 +190,20 @@ def _board_svg():
         if abs(ay - by) >= _NODE_H:
             y1, y2 = ay + _NODE_H / 2, by - _NODE_H / 2
             lines.append(f"<path d='M{ax} {y1:.0f} V{(y1+y2)/2:.0f} H{bx} V{y2:.0f}' "
-                         f"fill='none' stroke='#3a6' stroke-width='1' opacity='0.55'/>")
+                         f"fill='none' stroke='#5fd49a' stroke-width='1.8' opacity='0.85'/>")
         else:
             x1 = ax + _node_w(a) / 2
             x2 = bx - _node_w(b) / 2
             lines.append(f"<line x1='{x1:.0f}' y1='{ay}' x2='{x2:.0f}' y2='{by}' "
-                         f"stroke='#3a6' stroke-width='1' opacity='0.55'/>")
-    return (
-        "<svg viewBox='0 0 700 256' width='100%' style='max-width:560px;display:block;"
-        "margin:0 auto;'>"
+                         f"stroke='#5fd49a' stroke-width='1.8' opacity='0.85'/>")
+    svg = (
+        "<svg viewBox='0 0 700 264' width='100%' style='display:block;'>"
         + "".join(lines) + "".join(rects) + "".join(texts) + "</svg>")
+    # 暗いパネルで囲み、ページのテーマ（明/暗）に依らず緑が映えるようにする
+    return (
+        "<div style='background:#0a0f0c;border:1px solid #1f3b2e;border-radius:8px;"
+        "padding:14px 16px;max-width:600px;margin:0 auto;"
+        "box-shadow:inset 0 0 30px rgba(62,224,143,0.06);'>" + svg + "</div>")
 
 
 def render_board():
@@ -667,8 +671,6 @@ def home():
                 with c2:
                     badge = " ✅クリア済" if cleared else ""
                     st.subheader(f"{g['title']}{badge}")
-                    st.caption(f"ジャンル: {g['genre']}")
-                    st.write(g["desc"])
                     if st.button(f"▶ {g['title']} を遊ぶ", key=f"play_{g['key']}",
                                  use_container_width=True):
                         noxa.record_play(g["key"])
@@ -695,8 +697,6 @@ def home():
                         unsafe_allow_html=True)
             with c2:
                 st.subheader("Project 000")
-                st.caption("ジャンル: 真相回収")
-                st.write("すべての事件が一つに繋がる、最後の作品。")
                 if st.button("▶ Project 000 を起動", key="play_p000",
                              use_container_width=True):
                     st.switch_page(p000_page)
