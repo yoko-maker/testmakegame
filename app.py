@@ -229,20 +229,23 @@ def render_observation_log():
     name = noxa.state().get("player", "guest")
     mp = noxa.most_played_key()
     mp_title = noxa.GAME_TITLES.get(mp, "—") if mp else "—"
-    body = (
-        "<b>Observation Log</b><br><br>"
-        f"Subject: {name}<br>"
-        f"Login Count: {o['login_count']}<br>"
-        f"Most Played: {mp_title}<br>"
-        f"Last Login: {o['last_login'] or '—'}<br>"
-        f"/_void Visits: {o['void_visits']}<br>"
-        "Status: <span style='color:#f88'>Still investigating.</span>"
-    )
+    rows = [
+        ("Subject", name),
+        ("Login Count", str(o["login_count"])),
+        ("Most Played", mp_title),
+        ("Last Login", o["last_login"] or "—"),
+        ("/_void Visits", str(o["void_visits"])),
+    ]
+    # 各行を個別の div にして、枠（範囲）と中身の行ぞろえのズレを防ぐ
+    lines = "".join(
+        f"<div style='margin:2px 0;'>{k}: "
+        f"<span style='color:#d7ffe6;'>{v}</span></div>" for k, v in rows)
+    lines += ("<div style='margin:2px 0;'>Status: "
+              "<span style='color:#ff8a8a;'>Still investigating.</span></div>")
     st.markdown(
         "<div style='background:#05070b;border:1px solid #2ec27a;border-radius:6px;"
-        "padding:14px 16px;font-family:monospace;color:#8fffb0;font-size:0.9em;"
-        "line-height:1.6;box-shadow:0 0 14px rgba(46,194,122,0.30),"
-        f"inset 0 0 0 1px rgba(46,194,122,0.15);'>{body}</div>",
+        "padding:14px 16px;font-family:monospace;color:#8fffb0;font-size:0.9rem;"
+        f"line-height:1.7;box-shadow:0 0 12px rgba(46,194,122,0.25);'>{lines}</div>",
         unsafe_allow_html=True)
 
 
