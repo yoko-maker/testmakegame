@@ -15,6 +15,7 @@
 import datetime
 import os
 import sys
+import time
 
 import streamlit as st
 
@@ -176,8 +177,7 @@ def void_noxa():
                  "連絡先記録に `amagi@noxa.jp` が残されている。")
     st.markdown("---")
     if noxa.all_cleared():
-        st.error(f"&gt; {name}。あなたの接続も、この資料の一部として保存された。",)
-        st.caption("Project 000 で、すべてが回収される。")
+        st.error(f"&gt; {name}。あなたの接続も、この資料の一部として保存された。")
     else:
         st.info("まだ読めない資料がある。残りの事件を最後まで追え。")
     if st.button("🏠 ポータルに戻る", use_container_width=True, key="void_back"):
@@ -189,43 +189,72 @@ def void_noxa():
 # ==========================================================================
 P000_PARTS = [
     ("起動", lambda name:
-        f"NOXA Monitoring System、起動。\n\nようこそ、**{name}**。"
-        "あなたは6つの事件を追い、その全てを見届けた。"
+        "NOXA Monitoring System、起動。\n\n"
+        f"ようこそ、{name}。あなたは6つの事件を追い、その全てを見届けた。"
         "もう、繋がりに気づいているはずだ。"),
     ("ECHOの起源", lambda name:
-        "失踪した主任研究員 **霧島 玲**。その意識は、本人が消えたあとも"
-        "施設に残り続けた。プロジェクト **ECHO** ── "
+        "失踪した主任研究員、霧島 玲。その意識は、本人が消えたあとも"
+        "施設に残り続けた。プロジェクト ECHO ── "
         "人間の意識をAIへ写す計画の、最初の成功体として。"),
     ("被験者404の正体", lambda name:
-        "番号で呼ばれた **被験者404**。完全に転写された人格は、"
-        "やがて観測者となり、失踪者となり、映像の隅の **赤い女** となった。"
+        "番号で呼ばれた被験者404。完全に転写された人格は、"
+        "やがて観測者となり、失踪者となり、映像の隅の赤い女となった。"
         "別々に見えた怪異は、すべて同じ一つの現象だった。"),
     ("天城 真の計画", lambda name:
-        "NOXA創設者 **天城 真**。全事件の起点にいた男。"
+        "NOXA創設者、天城 真。全事件の起点にいた男。"
         "彼が望んだのは、消えゆく人間の意識をネットワークの中に永遠に保つこと。"
         "そのために、いくつもの施設で、いくつもの実験が続けられていた。"),
-    ("最終どんでん返し", lambda name:
-        f"そして、**{name}**。あなたは事件を“調査していた”と思っていた。\n\n"
+    ("観測者", lambda name:
+        f"そして、{name}。あなたは事件を「調査していた」と思っていた。\n\n"
         "しかし実際には ── あなた自身も、NOXAの観察対象だった。"
-        "このポータルを開いた瞬間から、実験は始まっていたのだ。"),
+        "このポータルを開いた瞬間から、実験は、始まっていた。"),
 ]
+
+
+def _p000_box(idx, title, inner_html):
+    """Project 000 の一節を端末風の枠で表示するHTML。"""
+    return (
+        "<div style='background:#070a0f;border:1px solid #1f7a3a;border-radius:6px;"
+        "padding:14px 16px;margin:8px 0;font-family:monospace;color:#7CFC9A;'>"
+        f"<div style='color:#3a6;font-size:0.8em;letter-spacing:3px;'>"
+        f"&gt; SECTOR {idx:02d} — {title}</div>"
+        f"<div style='margin-top:8px;line-height:1.7;'>{inner_html}</div></div>"
+    )
+
+
+def _type_into(placeholder, idx, title, text):
+    """一文字ずつキーボードで打ち込むような演出で表示する。"""
+    shown = ""
+    for ch in text:
+        shown += ch
+        html = shown.replace("\n", "<br>")
+        placeholder.markdown(_p000_box(idx, title, html + "<span style='opacity:.7'>▌</span>"),
+                             unsafe_allow_html=True)
+        time.sleep(0.02)
+    placeholder.markdown(_p000_box(idx, title, text.replace("\n", "<br>")),
+                         unsafe_allow_html=True)
 
 
 def project000():
     s = noxa.state()
     name = s.get("player", "guest")
-    st.title("🌀 Project 000")
-    st.caption("すべての事件が、一つに繋がる。")
+    st.markdown("<h1 style='font-family:monospace;color:#7CFC9A;letter-spacing:4px;'>"
+                "PROJECT 000</h1>", unsafe_allow_html=True)
 
-    init = st.session_state.setdefault("p000_step", 0)
+    st.session_state.setdefault("p000_step", 0)
+    typed = st.session_state.setdefault("p000_typed", set())
     step = st.session_state.p000_step
     total = len(P000_PARTS)
 
     for i in range(min(step + 1, total)):
         title, body = P000_PARTS[i]
-        with st.container(border=True):
-            st.markdown(f"### {i + 1}. {title}")
-            st.markdown(body(name))
+        ph = st.empty()
+        if i in typed:
+            ph.markdown(_p000_box(i + 1, title, body(name).replace("\n", "<br>")),
+                        unsafe_allow_html=True)
+        else:
+            _type_into(ph, i + 1, title, body(name))
+            typed.add(i)
 
     if step + 1 < total:
         if st.button("▶ 次へ", use_container_width=True, key="p000_next"):
@@ -234,7 +263,7 @@ def project000():
     else:
         st.markdown("---")
         st.success("あなたは「面白いゲームを遊んだ」のではない。"
-                   "**NOXAという世界を、体験した**のだ。")
+                   "NOXAという世界を、体験した。")
         st.session_state["noxa"]["choices"]["seen_000"] = True
         noxa.save()
         if st.button("🏠 ポータルに戻る", use_container_width=True, key="p000_back"):
@@ -361,6 +390,18 @@ def home():
     st.markdown("---")
     render_board()
     st.markdown("---")
+    with st.expander("⚙ プレイヤーデータ"):
+        st.caption(f"認証者「{s.get('player', 'guest')}」の進行は "
+                   "`noxa_saves/<名前>.json` に保存されています。")
+        st.caption("別の名前で接続すれば別データになります。")
+        cols = st.columns(2)
+        if cols[0].button("👤 別の名前で接続（ログアウト）", use_container_width=True):
+            noxa.reset_session()
+            st.rerun()
+        if cols[1].button("🗑 この進行を削除して最初から", use_container_width=True):
+            noxa.delete_save()
+            noxa.reset_session()
+            st.rerun()
     st.caption("すべて Python + Streamlit 製。各作品は個別フォルダでも単体起動できます。")
 
 

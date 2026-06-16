@@ -479,9 +479,9 @@ def solo_header(code: str, role: str, room: dict) -> str:
         "いま操作している端末", opts, index=idx, horizontal=True,
         format_func=lambda r: ("✅ " if room["solved"][stg][r] else "")
         + labels[r], key=f"solo_role_{stg}")
-    if picked != role:
-        st.session_state.pl_role = picked
-        app_rerun()
+    # radio を「現在操作中の端末」の唯一の真実源にする。
+    # （手動 rerun で奪い合うとボタン切替と競合して戻ってしまうため）
+    st.session_state.pl_role = picked
 
     done = {r: room["solved"][stg][r] for r in opts}
     st.caption(
@@ -545,6 +545,9 @@ def answer_block(code: str, role: str, stage: int, expected: str, label: str,
                 if st.button(f"▶ {('P2・外側' if partner=='p2' else 'P1・内側')}"
                              "の端末に切り替える",
                              key=f"swap_{stage}_{role}", use_container_width=True):
+                    # 上部トグル(radio)のウィジェット状態も同期させないと、
+                    # 古い選択に引き戻されて切り替わらない。
+                    st.session_state[f"solo_role_{stage}"] = partner
                     st.session_state.pl_role = partner
                     app_rerun()
             return

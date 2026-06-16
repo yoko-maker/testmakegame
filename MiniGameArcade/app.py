@@ -8,7 +8,7 @@
   ✊ じゃんけんバトル
   🧠 神経衰弱（メモリーマッチ）
   ❓ クイズ
-  🎰 スロットマシン
+  🎴 ハイ&ロー
   🔤 ハングマン
   🛒 景品交換所
   🔢 数列の記憶（隠しゲーム・コインで解放）
@@ -39,7 +39,7 @@ ACHIEVEMENTS = {
     "rps_king": ("👑 じゃんけん王", "じゃんけんで5勝した"),
     "memory_master": ("🧠 記憶の達人", "神経衰弱を20手以内でクリア"),
     "quiz_master": ("📚 クイズマスター", "クイズで全問正解"),
-    "jackpot": ("💰 ジャックポット", "スロットで3つ揃えた"),
+    "jackpot": ("🎴 ハイ&ローの達人", "ハイ&ローで5連勝して受け取った"),
     "word_master": ("🔤 言葉の達人", "ハングマンをクリア"),
     "rich": ("🤑 大富豪", "コインを500枚ためた"),
     "listener": ("☕ 聞き上手", "マスターの身の上話を最後まで聞いた"),
@@ -108,7 +108,7 @@ def master_unlocked_count():
 # 景品交換所のカタログ
 # --------------------------------------------------------------------------
 SHOP_BADGES = {
-    "badge_cherry": ("🍒 チェリーピン", "スロット好きの証", 120),
+    "badge_cherry": ("🍒 チェリーピン", "勝負師の証", 120),
     "badge_seven": ("7️⃣ ラッキーセブン章", "幸運を呼ぶ収集バッジ", 250),
     "badge_404": ("📟 “404”の欠片", "見つからないはずのバッジ。なぜここに？", 404),
 }
@@ -695,62 +695,96 @@ def game_quiz():
 
 
 # --------------------------------------------------------------------------
-# ゲーム5: スロットマシン
+# ゲーム5: ハイ&ロー（コインを賭ける数字バトル）
 # --------------------------------------------------------------------------
-SLOT_SYMBOLS = ["🍒", "🍋", "🔔", "⭐", "💎", "7️⃣"]
-SLOT_PAYOUT = {"🍒": 10, "🍋": 15, "🔔": 20, "⭐": 30, "💎": 50, "7️⃣": 100}
-SPIN_COST = 10
+HL_MIN_BET = 5
+HL_FACE = {1: "A", 11: "J", 12: "Q", 13: "K"}
 
 
-def game_slot():
-    st.header("🎰 スロットマシン")
-    st.caption(f"1回 {SPIN_COST}コインでスピン。コインは他のゲームでも稼げるよ！")
+def hl_face(n):
+    return HL_FACE.get(n, str(n))
 
-    init_state("sl_reels", ["❔", "❔", "❔"])
-    init_state("sl_message", "コインを賭けてスピン！")
 
-    st.markdown(
-        f"<div style='font-size:72px; text-align:center; letter-spacing:16px;'>"
-        f"{' '.join(st.session_state.sl_reels)}</div>",
-        unsafe_allow_html=True,
-    )
-    st.info(st.session_state.sl_message)
+def game_hilo():
+    st.header("🎴 ハイ&ロー")
+    st.caption("次のカード(A〜K)が今より上か下かを当てる。連勝でポットが増え、"
+               "好きなところで“受け取る”。確率を見て、引き際を見極めろ。")
+
+    init_state("hl_active", False)
+    init_state("hl_card", None)
+    init_state("hl_pot", 0)
+    init_state("hl_streak", 0)
+    init_state("hl_message", "コインを賭けて勝負！")
+
     st.metric("💴 所持コイン", st.session_state.coins)
 
-    can_spin = st.session_state.coins >= SPIN_COST
-    if st.button(f"🎯 スピン（-{SPIN_COST}コイン）", use_container_width=True, disabled=not can_spin):
-        add_coins(-SPIN_COST)
-        # 極稀イースターエッグ: リールに「404」が浮かぶ
-        if random.random() < 0.01:
-            st.session_state.sl_reels = ["4️⃣", "0️⃣", "4️⃣"]
-            add_coins(40)
-            st.session_state.sl_message = (
-                "📟 リールに見覚えのない「404」が浮かんだ……マスターがこちらを見た。 +40コイン"
-            )
+    # --- 勝負前: ベットして開始 ---
+    if not st.session_state.hl_active:
+        st.info(st.session_state.hl_message)
+        if st.session_state.coins < HL_MIN_BET:
+            st.warning("コインが足りません。他のゲームで稼ごう！")
+            return
+        max_bet = max(HL_MIN_BET, min(st.session_state.coins, 200))
+        bet = st.slider("ベット額", HL_MIN_BET, max_bet, min(20, max_bet), step=5)
+        if st.button("🎴 勝負を始める", use_container_width=True):
+            add_coins(-bet)
+            st.session_state.hl_card = random.randint(1, 13)
+            st.session_state.hl_pot = bet
+            st.session_state.hl_streak = 0
+            st.session_state.hl_active = True
+            st.session_state.hl_message = ""
             st.rerun()
-        reels = [random.choice(SLOT_SYMBOLS) for _ in range(3)]
-        st.session_state.sl_reels = reels
-        if reels[0] == reels[1] == reels[2]:
-            win = SLOT_PAYOUT[reels[0]]
-            add_coins(win)
-            st.session_state.sl_message = f"💰 ジャックポット！ +{win}コイン！"
-            st.session_state.clears += 1
-            unlock("jackpot")
-            st.balloons()
-        elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
-            add_coins(5)
-            st.session_state.sl_message = "✨ 2つ揃い！ +5コイン"
+        return
+
+    # --- 勝負中 ---
+    card = st.session_state.hl_card
+    st.markdown(f"<div style='font-size:80px; text-align:center;'>🎴 {hl_face(card)}</div>",
+                unsafe_allow_html=True)
+    p_high = (13 - card) / 13   # 次が大きい確率
+    p_low = (card - 1) / 13     # 次が小さい確率
+    st.write(f"💴 現在のポット: **{st.session_state.hl_pot}**　/　🔥 {st.session_state.hl_streak} 連勝")
+
+    def resolve(choice):
+        nxt = random.randint(1, 13)
+        p = p_high if choice == "high" else p_low
+        win = (choice == "high" and nxt > card) or (choice == "low" and nxt < card)
+        st.session_state.hl_card = nxt
+        if win and p > 0:
+            mult = (1 / p) * 0.9  # ハウスエッジ10%。低確率の賭けほど高倍率
+            st.session_state.hl_pot = max(st.session_state.hl_pot + 1,
+                                          int(st.session_state.hl_pot * mult))
+            st.session_state.hl_streak += 1
+            st.session_state.hl_message = (
+                f"✅ {hl_face(card)} → {hl_face(nxt)} 的中！ ポット {st.session_state.hl_pot}")
         else:
-            st.session_state.sl_message = "残念！ もう一度どうぞ"
+            st.session_state.hl_active = False
+            st.session_state.hl_pot = 0
+            st.session_state.hl_streak = 0
+            st.session_state.hl_message = (
+                f"💥 {hl_face(card)} → {hl_face(nxt)} 外れ。ポットは消えた…（引き際が肝心だ）")
         st.rerun()
 
-    if not can_spin:
-        st.warning("コインが足りません。他のゲームで稼ごう！")
+    c1, c2 = st.columns(2)
+    if c1.button(f"⬆️ ハイ（{p_high*100:.0f}%）", use_container_width=True, disabled=(card == 13)):
+        resolve("high")
+    if c2.button(f"⬇️ ロー（{p_low*100:.0f}%）", use_container_width=True, disabled=(card == 1)):
+        resolve("low")
 
-    with st.expander("配当表"):
-        for sym, pay in SLOT_PAYOUT.items():
-            st.write(f"{sym} × 3　→　+{pay} コイン")
-        st.write("いずれか2つ揃い　→　+5 コイン")
+    if st.button(f"💰 ここで受け取る（+{st.session_state.hl_pot}コイン）",
+                 use_container_width=True, type="primary"):
+        pot = st.session_state.hl_pot
+        streak = st.session_state.hl_streak
+        add_coins(pot)
+        st.session_state.clears += 1
+        if streak >= 5:
+            unlock("jackpot")
+        st.session_state.hl_active = False
+        st.session_state.hl_message = f"🎉 {pot}コインを受け取った！（{streak}連勝）"
+        st.balloons()
+        st.rerun()
+
+    st.caption("ヒント: 数字が端（Aや K）に近いほど一方の確率が高い。"
+               "低確率の賭けほど当たれば倍率は大きいが、欲張ると全部失う。")
 
 
 # --------------------------------------------------------------------------
@@ -891,7 +925,7 @@ PAGES = {
     "✊ じゃんけんバトル": game_rps,
     "🧠 神経衰弱": game_memory,
     "❓ クイズ": game_quiz,
-    "🎰 スロットマシン": game_slot,
+    "🎴 ハイ&ロー": game_hilo,
     "🔤 ハングマン": game_hangman,
     "🛒 景品交換所": page_shop,
 }

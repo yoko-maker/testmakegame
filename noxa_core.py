@@ -126,6 +126,27 @@ def save():
         pass
 
 
+def delete_save(name=None):
+    """プレイヤーの進行ファイルを削除する（name 省略時は現在のプレイヤー）。"""
+    try:
+        target = name or state().get("player")
+    except Exception:
+        target = name
+    if not target:
+        return
+    try:
+        p = _save_path(target)
+        if os.path.exists(p):
+            os.remove(p)
+    except Exception:
+        pass
+
+
+def reset_session():
+    """セッション内の進行を初期化する（次の描画で名前ゲートに戻る）。"""
+    st.session_state["noxa"] = _default_state()
+
+
 def load(name):
     """名前の保存をロードしてセッションへ反映する。無ければ新規開始。"""
     s = _default_state()
