@@ -71,7 +71,7 @@ _RESPONSIVE_CSS = """
 @media (max-width: 680px) {
   /* 左右は詰めて表示幅を稼ぐが、上は十分にあけて
      Streamlitの上部ツールバーにコンテンツが潜り込む（見切れ）のを防ぐ */
-  .block-container { padding: 3rem 0.6rem 1.2rem !important; }
+  .block-container { padding: 3rem 0.6rem 2.5rem !important; }
   .stApp, .block-container { overflow-x: hidden !important; }
 
   h1 { font-size: 1.5rem !important; letter-spacing: 1px !important; line-height: 1.25 !important; }

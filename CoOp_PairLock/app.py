@@ -464,6 +464,15 @@ def live_sync(code: str, role: str):
 def solo_header(code: str, role: str, room: dict) -> str:
     """ソロモードのヘッダ。P1/P2 を切り替えるトグルを出し、操作中ロールを返す。"""
     stg = room["stage"]
+    rkey = f"solo_role_{stg}"
+    # 下部「切り替え」ボタンからの保留ロール変更は、radio を生成する“前”に反映する。
+    # （生成後に widget の session_state を書き換えると Streamlit 例外になるため）
+    pend = st.session_state.pop("_pl_pending_role", None)
+    if pend in ("p1", "p2"):
+        st.session_state[rkey] = pend
+        st.session_state.pl_role = pend
+        role = pend
+
     st.markdown(
         f"ROOM **{code}** <span style='opacity:0.7'>(ソロ)</span> ／ 安定度 "
         f"**{room['stability']}%**", unsafe_allow_html=True)
@@ -474,13 +483,14 @@ def solo_header(code: str, role: str, room: dict) -> str:
         "p2": "P2 ・ 外側/救助（端末β）",
     }
     opts = ["p1", "p2"]
-    idx = opts.index(role) if role in opts else 0
-    picked = st.radio(
-        "いま操作している端末", opts, index=idx, horizontal=True,
-        format_func=lambda r: ("✅ " if room["solved"][stg][r] else "")
-        + labels[r], key=f"solo_role_{stg}")
+    rkwargs = dict(
+        horizontal=True, key=rkey,
+        format_func=lambda r: ("✅ " if room["solved"][stg][r] else "") + labels[r])
+    # 既に session_state に選択がある場合は index を渡さない（重複指定の警告回避）
+    if rkey not in st.session_state:
+        rkwargs["index"] = opts.index(role) if role in opts else 0
+    picked = st.radio("いま操作している端末", opts, **rkwargs)
     # radio を「現在操作中の端末」の唯一の真実源にする。
-    # （手動 rerun で奪い合うとボタン切替と競合して戻ってしまうため）
     st.session_state.pl_role = picked
 
     done = {r: room["solved"][stg][r] for r in opts}
@@ -545,10 +555,9 @@ def answer_block(code: str, role: str, stage: int, expected: str, label: str,
                 if st.button(f"▶ {('P2・外側' if partner=='p2' else 'P1・内側')}"
                              "の端末に切り替える",
                              key=f"swap_{stage}_{role}", use_container_width=True):
-                    # 上部トグル(radio)のウィジェット状態も同期させないと、
-                    # 古い選択に引き戻されて切り替わらない。
-                    st.session_state[f"solo_role_{stage}"] = partner
-                    st.session_state.pl_role = partner
+                    # radio は生成済みのため、ここでは直接書き換えず保留フラグだけ立てる。
+                    # 次回 solo_header が radio 生成前に反映する（例外回避）。
+                    st.session_state["_pl_pending_role"] = partner
                     app_rerun()
             return
         waiting_view(code, role, stage)
