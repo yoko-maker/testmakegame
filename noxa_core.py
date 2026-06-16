@@ -257,24 +257,30 @@ def _intrusion_static(lines):
 
 
 def _intrusion_cinematic(lines):
-    """画面暗転 → 一文字ずつ打ち込む演出（初回オープン時のみ）。"""
+    """画面暗転 → 一文字ずつ打ち込む演出（初回オープン時のみ）。
+
+    z-index を最前面にしてサイドバーごと覆い（文字被り防止）、テキストは
+    画面中央の固定幅パネルに左寄せで表示する。
+    """
     ph = st.empty()
-    base = ("position:fixed;inset:0;z-index:99990;background:#050505;"
-            "font-family:monospace;display:flex;flex-direction:column;"
-            "align-items:flex-start;justify-content:center;padding:8% 10%;"
-            "gap:12px;font-size:1.05rem;line-height:1.7;")
+    # 全面を黒で覆う（サイドバーより必ず手前）＋テキストは中央のパネルへ
+    outer = ("position:fixed;inset:0;z-index:2147483000;background:#050505;"
+             "display:flex;align-items:center;justify-content:center;")
+    panel = ("width:min(680px,86vw);text-align:left;font-family:monospace;"
+             "font-size:1.05rem;line-height:1.8;")
     done = ""
     for text, color in lines:
         typed = ""
         for ch in text:
             typed += ch
-            cur = done + (f"<div style='color:{color}'>{typed}"
+            cur = done + (f"<div style='color:{color};margin:6px 0;'>{typed}"
                           f"<span style='opacity:.55'>▌</span></div>")
-            ph.markdown(f"<div style='{base}'>{cur}</div>", unsafe_allow_html=True)
-            time.sleep(0.02)
-        done += f"<div style='color:{color}'>{text}</div>"
-        time.sleep(0.3)
-    time.sleep(0.7)
+            ph.markdown(f"<div style='{outer}'><div style='{panel}'>{cur}</div></div>",
+                        unsafe_allow_html=True)
+            time.sleep(0.055)
+        done += f"<div style='color:{color};margin:6px 0;'>{text}</div>"
+        time.sleep(0.5)
+    time.sleep(1.0)
     ph.empty()
 
 

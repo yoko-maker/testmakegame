@@ -519,7 +519,7 @@ def maybe_fake_error():
     if random.random() >= 0.12:
         return
     st.session_state["fake_err_shown"] = True
-    base = ("position:fixed;inset:0;z-index:99999;display:flex;align-items:center;"
+    base = ("position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;"
             "justify-content:center;font-family:monospace;font-size:30px;letter-spacing:3px;")
     ph = st.empty()
     high = noxa.is_cleared("pairlock") or noxa.all_cleared()
