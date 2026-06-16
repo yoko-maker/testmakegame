@@ -98,17 +98,32 @@ def _default_obs():
 
 
 def state():
-    """セッション内の共有state（無ければ初期化）を返す。"""
-    if "noxa" not in st.session_state:
+    """セッション内の共有state（無ければ初期化）を返す。
+
+    旧バージョンのセッション/セーブ（キー欠落・型違い・None）でも壊れないよう
+    全サブ構造を防御的に整える。これにより開発中のホットリロードで残った
+    古い session_state でも AttributeError を出さない。
+    """
+    if not isinstance(st.session_state.get("noxa"), dict):
         st.session_state["noxa"] = _default_state()
     s = st.session_state["noxa"]
-    # 旧バージョンのsaveに無いキーを補完
+    # 必須サブ構造を保証（欠落・None・型違いを修復）
+    if not isinstance(s.get("cleared"), dict):
+        s["cleared"] = {}
     for k in GAME_KEYS:
         s["cleared"].setdefault(k, False)
+    if not isinstance(s.get("board"), dict):
+        s["board"] = {}
     for item in BOARD_ITEMS:
         s["board"].setdefault(item, False)
-    s.setdefault("seen_unlocks", [])
-    s.setdefault("obs", _default_obs())
+    if not isinstance(s.get("choices"), dict):
+        s["choices"] = {}
+    if not isinstance(s.get("seen_unlocks"), list):
+        s["seen_unlocks"] = []
+    s.setdefault("seen_intro", False)
+    s.setdefault("player", "")
+    if not isinstance(s.get("obs"), dict):
+        s["obs"] = _default_obs()
     return s
 
 
@@ -123,12 +138,17 @@ def _now_str():
 
 
 def obs():
-    o = state().setdefault("obs", _default_obs())
+    s = state()
+    if not isinstance(s.get("obs"), dict):
+        s["obs"] = _default_obs()
+    o = s["obs"]
     o.setdefault("login_count", 0)
     o.setdefault("first_seen", "")
     o.setdefault("last_login", "")
-    o.setdefault("logins", [])
-    o.setdefault("plays", {})
+    if not isinstance(o.get("logins"), list):
+        o["logins"] = []
+    if not isinstance(o.get("plays"), dict):
+        o["plays"] = {}
     for k in GAME_KEYS:
         o["plays"].setdefault(k, 0)
     o.setdefault("void_visits", 0)
