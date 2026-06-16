@@ -50,6 +50,66 @@ def noise_wav_bytes(seconds=2.0, volume=0.16, rate=22050):
         return b""
 
 
+# ==========================================================================
+# スマホ / PC 対応（app.py に自己完結。noxa_core の更新に依存しない）
+# ==========================================================================
+def _is_mobile():
+    """User-Agent からスマホ系端末かを推定（取得不可なら False＝PC扱い）。"""
+    try:
+        ua = (st.context.headers.get("User-Agent", "") or "").lower()
+    except Exception:
+        return False
+    return any(t in ua for t in
+               ("mobi", "android", "iphone", "ipad", "ipod", "windows phone"))
+
+
+# 共通レスポンシブCSS。ポータル本体で1回入れると各ゲームページにも効く。
+# グリッド型ミニゲーム（神経衰弱/五十音/スライド/PAIR LOCK等）が
+# スマホでも1行に収まり、タップしやすいことを重視。
+_RESPONSIVE_CSS = """
+<style>
+@media (max-width: 680px) {
+  .block-container { padding: 0.8rem 0.5rem !important; }
+  .stApp, .block-container { overflow-x: hidden !important; }
+
+  h1 { font-size: 1.5rem !important; letter-spacing: 1px !important; line-height: 1.25 !important; }
+  h2 { font-size: 1.2rem !important; letter-spacing: 0.5px !important; }
+  h3 { font-size: 1.05rem !important; }
+
+  /* カラム(グリッド)をスマホ幅に収める核心:
+     既定の min-width を外し、横並びのまま縮ませ、間隔も詰める */
+  [data-testid="stHorizontalBlock"] { gap: 0.25rem !important; flex-wrap: nowrap !important; }
+  [data-testid="column"], [data-testid="stColumn"] {
+      min-width: 0 !important;
+      padding: 0 1px !important;
+  }
+
+  /* グリッドのボタンが潰れず、かつ指で押しやすいサイズに */
+  .stButton > button {
+      min-height: 44px;
+      padding: 0.3rem 0.15rem !important;
+      font-size: 1rem !important;
+      white-space: normal !important;
+      line-height: 1.15 !important;
+  }
+
+  /* PAIR LOCK のマス目グリッドを縮小 */
+  .pl-grid td, .pl-grid th {
+      width: 38px !important; height: 38px !important; font-size: 1.0rem !important;
+  }
+  .pl-cipher { font-size: 1.8rem !important; letter-spacing: 0.3rem !important; }
+
+  /* 特大の装飾文字（スロット/ハングマン/ハイ&ロー/数字表示の40〜80px）を縮小 */
+  div[style*="font-size:72px"], div[style*="font-size: 72px"],
+  div[style*="font-size:80px"], div[style*="font-size: 80px"],
+  div[style*="font-size:40px"], div[style*="font-size: 40px"] {
+      font-size: 40px !important; letter-spacing: 4px !important;
+  }
+}
+</style>
+"""
+
+
 # 作品メタ情報（key は noxa の作品キー / ポータルの url_path と一致）
 GAMES = [
     {
@@ -676,7 +736,7 @@ def home():
     if announced:
         noxa.save()
 
-    mobile = noxa.is_mobile()
+    mobile = _is_mobile()
     for g in GAMES:
         is_unlocked = g["key"] in unlocked
         cleared = noxa.is_cleared(g["key"])
@@ -790,7 +850,7 @@ nav = st.navigation([home_page] + game_pages + [void_page, p000_page, chat_page]
                     position="hidden")
 
 # 共通レスポンシブCSS（ここで1回入れると以降のゲームページ描画にも効く）
-noxa.inject_responsive()
+st.markdown(_RESPONSIVE_CSS, unsafe_allow_html=True)
 
 # ポータル統合中であることを各ゲームへ知らせる（「ポータルに戻る」ボタン表示の判定用）
 st.session_state["_in_portal"] = True
