@@ -90,8 +90,9 @@ def title_screen():
     st.caption(f"※ 接続オペレーター: {st.session_state.player_name}（この名前は物語の後半で牙を剥く）")
 
     if st.button("▶ 接続を開始する", type="primary", use_container_width=True):
-        # 接続を開始した『現在の時刻』を自動取得（終盤の名指し演出で使用）。
-        st.session_state.player_time = datetime.datetime.now().strftime("%H:%M")
+        # 接続を開始した『現在の時刻』を日本時間(JST)で自動取得（終盤の名指し演出で使用）。
+        _jst = datetime.timezone(datetime.timedelta(hours=9))
+        st.session_state.player_time = datetime.datetime.now(_jst).strftime("%H:%M")
         state.goto(1)
         st.rerun()
 

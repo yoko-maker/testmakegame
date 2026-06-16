@@ -131,9 +131,13 @@ def state():
 # --------------------------------------------------------------------------
 # 観察ログ（プレイヤーの行動記録）
 # --------------------------------------------------------------------------
+# 日本標準時（JST, UTC+9）。サーバ時刻(UTC)に依らず日本時間で記録する。
+_JST = datetime.timezone(datetime.timedelta(hours=9))
+
+
 def _now_str():
     try:
-        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        return datetime.datetime.now(_JST).strftime("%Y-%m-%d %H:%M")
     except Exception:
         return ""
 
@@ -449,7 +453,7 @@ def persist_message():
 
 def today_str():
     try:
-        return datetime.date.today().isoformat()
+        return datetime.datetime.now(_JST).date().isoformat()
     except Exception:
         return ""
 

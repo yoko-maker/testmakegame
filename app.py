@@ -33,12 +33,42 @@ if _arg_dir not in sys.path:
 
 import noxa_core as noxa  # 作品横断の共有状態・進行管理
 
+# 日本標準時（JST, UTC+9）。クラウドのサーバ時刻(UTC)に依らず日本時間で表示・判定する。
+JST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def jst_now():
+    return datetime.datetime.now(JST)
+
 
 def noise_wav_bytes(seconds=2.0, volume=0.16, rate=22050):
     """CRT/通信ノイズ風のホワイトノイズ音（WAVバイト列）を生成する。"""
     try:
         n = int(seconds * rate)
         samples = (np.random.uniform(-1, 1, n) * volume * 32767).astype("<i2")
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(samples.tobytes())
+        return buf.getvalue()
+    except Exception:
+        return b""
+
+
+def tone_wav_bytes(freq=110.0, seconds=1.2, volume=0.12, rate=22050):
+    """サイン波の単音（ハム/ビープ用）WAVバイト列を生成する。"""
+    try:
+        n = int(seconds * rate)
+        t = np.arange(n) / rate
+        wave_arr = np.sin(2 * np.pi * freq * t)
+        # 端のプチノイズ防止に簡単なフェード
+        fade = min(int(rate * 0.02), n // 4) or 1
+        env = np.ones(n)
+        env[:fade] = np.linspace(0, 1, fade)
+        env[-fade:] = np.linspace(1, 0, fade)
+        samples = (wave_arr * env * volume * 32767).astype("<i2")
         buf = io.BytesIO()
         with wave.open(buf, "wb") as w:
             w.setnchannels(1)
@@ -141,17 +171,47 @@ _PORTAL_FX_CSS = """
   background: rgba(4,8,10,0.85); border-top: 1px solid rgba(80,200,160,0.25); padding: 3px 8px;
 }
 
-/* D. 赤い女（画面隅を一瞬よぎる赤い影） */
-.noxa-redwoman {
-  position: fixed; top: 8%; height: 84%; width: 46px; right: 6%; z-index: 9994; pointer-events: none;
-  background: linear-gradient(to bottom, transparent, rgba(210,20,20,0.55) 38%,
-              rgba(120,0,0,0.4) 72%, transparent);
-  filter: blur(7px); opacity: 0; animation: noxa-rw 3.4s ease-in-out 1 forwards;
+/* B. 常時監視インジケータ（画面隅で点滅する ●REC / 👁 MONITORING） */
+.noxa-rec {
+  position: fixed; top: 8px; right: 10px; z-index: 9996; pointer-events: none;
+  font-family: monospace; font-size: 0.72rem; color: #ff5555; letter-spacing: 1px;
 }
-@keyframes noxa-rw {
-  0% { opacity: 0; transform: translateX(24px); }
-  30% { opacity: 0.5; } 60% { opacity: 0.3; transform: translateX(0); }
-  100% { opacity: 0; transform: translateX(-12px); }
+.noxa-rec .dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  background: #ff3030; margin-right: 5px; vertical-align: middle;
+  animation: noxa-blink var(--rec-speed, 1.4s) steps(1) infinite;
+}
+@keyframes noxa-blink { 0%,49% { opacity: 1; } 50%,100% { opacity: 0.15; } }
+
+/* C. 赤い女 ＝ 監視カメラ映像フレーム（一瞬よぎる人影） */
+.noxa-cctv {
+  position: fixed; top: 14%; right: 5%; width: 150px; height: 200px; z-index: 9994;
+  pointer-events: none; border: 1px solid rgba(255,60,60,0.5); border-radius: 3px;
+  background: #0a0a0c; overflow: hidden; opacity: 0;
+  animation: noxa-cctv-show 3.6s ease-in-out 1 forwards;
+  box-shadow: 0 0 18px rgba(255,30,30,0.25);
+}
+.noxa-cctv::before {  /* 走査線 */
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 3px);
+}
+.noxa-cctv .fig {  /* 赤い人影 */
+  position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%);
+  width: 40px; height: 78%;
+  background: linear-gradient(to bottom, rgba(220,30,30,0.0), rgba(220,20,20,0.6) 30%,
+              rgba(130,0,0,0.5) 75%, transparent);
+  filter: blur(4px);
+}
+.noxa-cctv .lbl {
+  position: absolute; top: 3px; left: 5px; font-family: monospace; font-size: 0.62rem;
+  color: #ff6a6a; letter-spacing: 1px; z-index: 2;
+}
+.noxa-cctv .rec2 {
+  position: absolute; top: 3px; right: 5px; width: 7px; height: 7px; border-radius: 50%;
+  background: #ff3030; animation: noxa-blink 0.8s steps(1) infinite; z-index: 2;
+}
+@keyframes noxa-cctv-show {
+  0% { opacity: 0; } 18% { opacity: 0.92; } 70% { opacity: 0.85; } 100% { opacity: 0; }
 }
 </style>
 """
@@ -498,6 +558,10 @@ def _boot_sequence():
         return
     st.session_state["_booted"] = True
     name = noxa.state().get("player", "guest")
+    try:  # E. 起動時の低いハム音（端末が起動する臨場感）
+        st.audio(tone_wav_bytes(70.0, 2.2, volume=0.10), format="audio/wav", autoplay=True)
+    except Exception:
+        pass
     lines = ["NOXA NETWORK",
              "> establishing connection ...",
              f"> authenticating subject: {name}",
@@ -530,7 +594,7 @@ def _sector_transition(title):
 def render_portal_footer():
     """B. 画面下に常設するNOXA端末ステータスバー。"""
     name = noxa.state().get("player", "guest")
-    now = datetime.datetime.now().strftime("%H:%M")
+    now = jst_now().strftime("%H:%M")
     cc = noxa.clear_count()
     st.markdown(
         f"<div class='noxa-footer'>NOXA SYS v2.3.4 ｜ MONITORING ｜ Subject: {name} ｜ "
@@ -549,8 +613,63 @@ def render_system_ticker():
                 unsafe_allow_html=True)
 
 
+def _unlock_animation(title):
+    """A. 作品が解放される瞬間の端末演出（解放1回だけ）。"""
+    try:
+        st.audio(tone_wav_bytes(880.0, 0.18, volume=0.18), format="audio/wav", autoplay=True)
+    except Exception:
+        pass
+    base = ("position:fixed;inset:0;z-index:2147483600;background:#04060a;"
+            "display:flex;align-items:center;justify-content:center;text-align:center;"
+            "font-family:monospace;letter-spacing:3px;")
+    ph = st.empty()
+    frames = [
+        ("<div style='color:#9bb;font-size:1.1rem;'>&gt; verifying clearance ...</div>", 0.7),
+        ("<div style='color:#5fd49a;font-size:1.5rem;'>&gt; ACCESS GRANTED</div>", 0.7),
+        (f"<div style='color:#ffd24d;font-size:1.4rem;'>▣ SECTOR UNLOCKED<br>"
+         f"<span style='color:#fff'>{title}</span></div>", 1.1),
+    ]
+    for html, dur in frames:
+        ph.markdown(f"<div style='{base}'>{html}</div>", unsafe_allow_html=True)
+        time.sleep(dur)
+    ph.empty()
+
+
+def render_disconnect():
+    """D. 物語の節目で一度だけ起きる強制切断イベント（全画面＋再接続ボタン）。"""
+    st.markdown("<style>.stApp{background:#070303 !important;}</style>",
+                unsafe_allow_html=True)
+    try:
+        st.audio(noise_wav_bytes(1.4, volume=0.22), format="audio/wav", autoplay=True)
+    except Exception:
+        pass
+    st.markdown("<div style='height:16vh'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='text-align:center;font-family:monospace;color:#ff4040;'>"
+        "<div style='font-size:1.8rem;letter-spacing:5px;'>CONNECTION TERMINATED</div>"
+        "<div style='margin-top:8px;opacity:.8;letter-spacing:3px;'>BY NOXA</div>"
+        "<div style='margin-top:16px;color:#caa;font-size:0.9rem;'>"
+        "……あなたは、見過ぎたのかもしれない。</div></div>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    if c2.button("▶ 再接続する", use_container_width=True, key="reconnect"):
+        noxa.set_choice("seen_disconnect", True)
+        st.rerun()
+
+
+def render_monitoring_indicator():
+    """B. 画面隅に常時点滅する監視インジケータ。進行度で点滅が速くなる。"""
+    try:
+        cc = noxa.clear_count()
+    except Exception:
+        cc = 0
+    speed = max(0.5, 1.6 - cc * 0.18)   # 進むほど速く＝監視が強まる
+    st.markdown(
+        f"<div class='noxa-rec'><span class='dot' style='--rec-speed:{speed}s'></span>"
+        f"REC ｜ MONITORING</div>", unsafe_allow_html=True)
+
+
 def render_red_woman():
-    """D. 進行度に応じて、画面隅を赤い影が一瞬よぎる（セッション1回だけ抽選）。"""
+    """C. 進行度に応じて、監視カメラ映像に赤い人影が一瞬よぎる（セッション1回だけ抽選）。"""
     if st.session_state.get("_rw_done"):
         return
     st.session_state["_rw_done"] = True
@@ -560,14 +679,17 @@ def render_red_woman():
         lvl = 0
     prob = [0.0, 0.2, 0.4, 0.7][lvl] if 0 <= lvl <= 3 else 0.7
     if random.random() < prob:
-        st.markdown("<div class='noxa-redwoman'></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='noxa-cctv'>"
+            "<span class='lbl'>CAM 04</span><span class='rec2'></span>"
+            "<span class='fig'></span></div>", unsafe_allow_html=True)
 
 
 # ==========================================================================
 # 深夜イベント（現実時間連動 00:00〜04:04）
 # ==========================================================================
 def is_midnight_window():
-    now = datetime.datetime.now().time()
+    now = jst_now().time()
     return now <= datetime.time(4, 4)
 
 
@@ -757,25 +879,31 @@ def _p000_intro(name):
                 "text-align:center;'>RESEARCH TERMINAL</h1>", unsafe_allow_html=True)
 
 
+def _p000_status(name):
+    """研究所端末UIのステータスヘッダHTML（セクターと同じ1要素にまとめて描く）。"""
+    return ("<div style='background:#0a0608;border:1px solid #a33;border-radius:6px;"
+            "padding:10px 14px;margin-bottom:6px;font-family:monospace;color:#f99;"
+            "font-size:0.9em;line-height:1.6;'>"
+            f"Subject ID: <b>{name}</b><br>"
+            "Observation Status: <span style='color:#ff5555'>ACTIVE</span><br>"
+            "Memory Collection: <span style='color:#7CFC9A'>COMPLETE</span></div>")
+
+
 def project000():
     s = noxa.state()
     name = s.get("player", "guest")
 
-    # 崩壊イントロ（1セッション1回・ノイズ音つき）
+    # 崩壊イントロ（1回）。専用の実行で再生し、終わったら即 rerun する。
+    # こうすると以降は常に「コンテンツのみ」の同じ要素構成になり、
+    # 実行ごとの要素ズレで前のセクター/ヘッダが薄く残る現象を防げる。
     if not st.session_state.get("p000_intro_done"):
-        st.audio(noise_wav_bytes(2.6), format="audio/wav", autoplay=True)
-        _p000_intro(name)
         st.session_state["p000_intro_done"] = True
-
-    # 永続ステータスヘッダ（研究所端末UI）
-    st.markdown(
-        "<div style='background:#0a0608;border:1px solid #a33;border-radius:6px;"
-        "padding:10px 14px;margin-bottom:6px;font-family:monospace;color:#f99;"
-        "font-size:0.9em;line-height:1.6;'>"
-        f"Subject ID: <b>{name}</b><br>"
-        "Observation Status: <span style='color:#ff5555'>ACTIVE</span><br>"
-        "Memory Collection: <span style='color:#7CFC9A'>COMPLETE</span></div>",
-        unsafe_allow_html=True)
+        try:
+            st.audio(noise_wav_bytes(2.6), format="audio/wav", autoplay=True)
+        except Exception:
+            pass
+        _p000_intro(name)
+        st.rerun()
 
     st.session_state.setdefault("p000_step", 0)
     typed = st.session_state.setdefault("p000_typed", set())
@@ -786,13 +914,15 @@ def project000():
         t, b = P000_PARTS[i]
         return _p000_box(i + 1, t, b(name).replace("\n", "<br>"))
 
-    # step より前のセクターは確定表示。全体を1要素にまとめて描くことで、
-    # 複数プレースホルダの重なりによる「前の文がうっすら残る」現象を防ぐ。
+    header = _p000_status(name)
     completed = "".join(_box_full(i) for i in range(step))
+
+    # ステータスヘッダ＋確定セクター＋進行中セクターを“単一の要素”に描く。
+    # これでタイプ中にヘッダや前セクターが二重表示／残像になることがない。
+    ph = st.empty()
     if step in typed:
-        st.markdown(completed + _box_full(step), unsafe_allow_html=True)
+        ph.markdown(header + completed + _box_full(step), unsafe_allow_html=True)
     else:
-        ph = st.empty()
         title, body = P000_PARTS[step]
         shown = ""
         for ch in body(name):
@@ -800,9 +930,9 @@ def project000():
             cur = _p000_box(step + 1, title,
                             shown.replace("\n", "<br>")
                             + "<span style='opacity:.7'>▌</span>")
-            ph.markdown(completed + cur, unsafe_allow_html=True)
+            ph.markdown(header + completed + cur, unsafe_allow_html=True)
             time.sleep(0.02)
-        ph.markdown(completed + _box_full(step), unsafe_allow_html=True)
+        ph.markdown(header + completed + _box_full(step), unsafe_allow_html=True)
         typed.add(step)
 
     if step + 1 < total:
@@ -995,16 +1125,18 @@ def home():
 
     unlocked = noxa.unlocked_games()
 
-    # 新規解放のお知らせ（前作クリアで作品が解放された瞬間に出す）
+    # A. 新規解放の演出（前作クリアで作品が解放された瞬間に1回だけ）
     seen = s.setdefault("seen_unlocks", [])
     announced = False
     for g in GAMES:
         if g["key"] in unlocked and g["key"] not in noxa.INITIAL_UNLOCKED \
                 and g["key"] not in seen:
+            _unlock_animation(g["title"])
             st.success(f"🔓 新たな作品が解放された ── 「{g['title']}」")
             seen.append(g["key"])
             announced = True
     if noxa.project000_unlocked() and "project000" not in seen:
+        _unlock_animation("PROJECT 000")
         st.success("🔓 最終作品 **Project 000** が解放された。")
         seen.append("project000")
         announced = True
@@ -1152,6 +1284,13 @@ if not st.session_state.get("obs_logged"):
     noxa.record_login()
 
 _target = getattr(nav, "url_path", "")
+_is_home = _target not in noxa.GAME_KEYS and _target not in ("void", "project000", "chat404")
+
+# D. 強制切断イベント（PAIR LOCKクリア後・ホームで一度だけ）。
+# FX/フッターより前で全画面を占有し、再接続するまで先へ進ませない。
+if _is_home and noxa.is_cleared("pairlock") and not noxa.get_choice("seen_disconnect"):
+    render_disconnect()
+    st.stop()
 
 # ゲームページ以外（ホーム等）ではサイドバーを隠す。
 # ゲームから「ポータルに戻る」で戻った際、空のサイドバー（展開状態）が
@@ -1163,10 +1302,11 @@ if _target not in noxa.GAME_KEYS:
         "[data-testid='stSidebarCollapsedControl'],"
         "[data-testid='collapsedControl'] { display:none !important; }"
         "</style>", unsafe_allow_html=True)
-    # 演出: 背景データストリーム＋常設ステータスフッター（ポータル系ページ）
+    # 演出: 背景データストリーム＋常設ステータスフッター＋監視インジケータ
     st.markdown(_PORTAL_FX_CSS, unsafe_allow_html=True)
     st.markdown("<div class='noxa-bg'></div>", unsafe_allow_html=True)
     render_portal_footer()
+    render_monitoring_indicator()
 
 # --- ロック: 未解放の作品にURL直アクセスしたら遊ばせない ---
 if _target in noxa.GAME_KEYS and _target not in noxa.unlocked_games():
