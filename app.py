@@ -112,6 +112,51 @@ _RESPONSIVE_CSS = """
 """
 
 
+# 演出CSS（ポータル限定）: 背景データストリーム / ティッカー / フッター / 赤い女
+_PORTAL_FX_CSS = """
+<style>
+.block-container { padding-bottom: 3rem !important; }
+
+/* F. 背景の生命感（極薄のデータストリーム。操作を妨げない） */
+.noxa-bg {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(0deg, rgba(80,200,160,0.035) 0 1px, transparent 1px 5px);
+  opacity: 0.5; animation: noxa-drift 14s linear infinite;
+}
+@keyframes noxa-drift { from { background-position: 0 0; } to { background-position: 0 200px; } }
+
+/* E. システム音声テロップ（流れるティッカー） */
+.noxa-ticker {
+  overflow: hidden; white-space: nowrap; margin: 2px 0 8px;
+  border-top: 1px solid rgba(80,200,160,0.22); border-bottom: 1px solid rgba(80,200,160,0.22);
+  font-family: monospace; font-size: 0.78rem; color: #79b6a0; background: rgba(6,14,12,0.45);
+}
+.noxa-ticker span { display: inline-block; padding-left: 100%; animation: noxa-tick 26s linear infinite; }
+@keyframes noxa-tick { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+
+/* B. 常設ステータスフッター */
+.noxa-footer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 9995; pointer-events: none;
+  font-family: monospace; font-size: 0.72rem; color: #7a9; letter-spacing: 1px; text-align: center;
+  background: rgba(4,8,10,0.85); border-top: 1px solid rgba(80,200,160,0.25); padding: 3px 8px;
+}
+
+/* D. 赤い女（画面隅を一瞬よぎる赤い影） */
+.noxa-redwoman {
+  position: fixed; top: 8%; height: 84%; width: 46px; right: 6%; z-index: 9994; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(210,20,20,0.55) 38%,
+              rgba(120,0,0,0.4) 72%, transparent);
+  filter: blur(7px); opacity: 0; animation: noxa-rw 3.4s ease-in-out 1 forwards;
+}
+@keyframes noxa-rw {
+  0% { opacity: 0; transform: translateX(24px); }
+  30% { opacity: 0.5; } 60% { opacity: 0.3; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(-12px); }
+}
+</style>
+"""
+
+
 # 作品メタ情報（key は noxa の作品キー / ポータルの url_path と一致）
 GAMES = [
     {
@@ -316,7 +361,10 @@ def render_observation_log():
 # ==========================================================================
 def render_persist_message():
     """⑨(置換) 累計ゲーム起動回数で進むパーソナルメッセージ。"""
-    msg = noxa.persist_message()
+    try:
+        msg = noxa.persist_message()
+    except Exception:
+        return  # noxa_core が古い等で関数が無くてもポータルは落とさない
     if msg:
         st.markdown(
             f"<div style='text-align:center;font-family:monospace;color:#caa;"
@@ -325,18 +373,21 @@ def render_persist_message():
 
 def render_ambient_event():
     """② 観測不能イベント / ⑥ ランダム会話盗聴。セッション1回だけ抽選（ちらつき防止）。"""
-    if noxa.clear_count() < 1:
+    try:
+        if noxa.clear_count() < 1:
+            return
+        if "_ambient" not in st.session_state:
+            r = random.random()
+            if r < 0.12:
+                st.session_state["_ambient"] = ("missed",
+                    noxa.MISSED_EVENTS[random.randrange(len(noxa.MISSED_EVENTS))])
+            elif r < 0.24:
+                st.session_state["_ambient"] = ("audio",
+                    noxa.CONVO_FRAGMENTS[random.randrange(len(noxa.CONVO_FRAGMENTS))])
+            else:
+                st.session_state["_ambient"] = None
+    except Exception:
         return
-    if "_ambient" not in st.session_state:
-        r = random.random()
-        if r < 0.12:
-            st.session_state["_ambient"] = ("missed",
-                noxa.MISSED_EVENTS[random.randrange(len(noxa.MISSED_EVENTS))])
-        elif r < 0.24:
-            st.session_state["_ambient"] = ("audio",
-                noxa.CONVO_FRAGMENTS[random.randrange(len(noxa.CONVO_FRAGMENTS))])
-        else:
-            st.session_state["_ambient"] = None
     amb = st.session_state.get("_ambient")
     if not amb:
         return
@@ -358,15 +409,18 @@ def render_ambient_event():
 
 def render_phantom_file():
     """⑪ 存在しないファイル memo_404.txt。初日は File Not Found、別の日に開くと HELP。"""
-    if noxa.clear_count() < 2:
+    try:
+        if noxa.clear_count() < 2:
+            return
+        ch = noxa.state()["choices"]
+        today = noxa.today_str()
+    except Exception:
         return
-    ch = noxa.state()["choices"]
     if not ch.get("phantom_seen"):
         if random.random() >= 0.10:
             return
         ch["phantom_seen"] = True
         noxa.save()
-    today = noxa.today_str()
     with st.expander("🗂 memo_404.txt"):
         first = ch.get("phantom_date")
         if not first:
@@ -385,29 +439,38 @@ def render_phantom_file():
 
 def render_noxa_feed():
     """① 活動ログ ＋ ④ タイムライン ＋ ⑤ 名簿 ＋ ③ 消された記録 ＋ ⑧ Observer。"""
+    # 先に noxa の新APIをまとめて取得（古い版なら静かにスキップ）
+    try:
+        feed_data = noxa.feed_lines()
+        timeline = noxa.timeline_rows()
+        roster = noxa.roster_rows()
+        recovered = noxa.erased_recovered()
+        observer = noxa.observer_unlocked()
+    except Exception:
+        return
     with st.expander("📡 NOXA INTERNAL FEED"):
         feed = "<br>".join(
-            f"<span style='color:#6a9'>[LOG]</span> {l}" for l in noxa.feed_lines())
+            f"<span style='color:#6a9'>[LOG]</span> {l}" for l in feed_data)
         st.markdown(f"<div style='font-family:monospace;font-size:0.85rem;color:#9bb;'>"
                     f"{feed}</div>", unsafe_allow_html=True)
 
         st.markdown("---")
         st.caption("🕰 NOXA TIMELINE")
-        for year, ev, unlocked in noxa.timeline_rows():
+        for year, ev, unlocked in timeline:
             color = "#cdb" if unlocked else "#667"
             st.markdown(f"<div style='font-family:monospace;color:{color};'>"
                         f"{year} ── {ev}</div>", unsafe_allow_html=True)
 
         st.markdown("---")
         st.caption("👥 消えた職員名簿")
-        for nm, stt in noxa.roster_rows():
+        for nm, stt in roster:
             st.markdown(f"<div style='font-family:monospace;'>{nm} "
                         f"<span style='color:#c77'>{stt}</span></div>",
                         unsafe_allow_html=True)
 
         st.markdown("---")
         st.caption("🗑 消された記録")
-        if noxa.erased_recovered():
+        if recovered:
             st.markdown("<div style='font-family:monospace;color:#cdb;'>Recovered Fragment:<br>"
                         "<i>There was another subject.</i><br>"
                         "<span style='opacity:.6'>……詳細は不明。</span></div>",
@@ -416,7 +479,7 @@ def render_noxa_feed():
             st.markdown("<div style='font-family:monospace;color:#955;'>"
                         "██████████ — <b>ACCESS DENIED</b></div>", unsafe_allow_html=True)
 
-        if noxa.observer_unlocked():
+        if observer:
             st.markdown("---")
             st.markdown("<div style='font-family:monospace;color:#f99;'>"
                         "👁 Observer — <b>Unknown</b><br>"
@@ -424,6 +487,80 @@ def render_noxa_feed():
                         "</div>", unsafe_allow_html=True)
 
         render_phantom_file()
+
+
+# ==========================================================================
+# 演出・画面表示（A:起動 / B:フッター / C:遷移 / D:赤い女 / E:ティッカー）
+# ==========================================================================
+def _boot_sequence():
+    """A. 初回接続時の端末起動演出（セッション1回）。"""
+    if st.session_state.get("_booted"):
+        return
+    st.session_state["_booted"] = True
+    name = noxa.state().get("player", "guest")
+    lines = ["NOXA NETWORK",
+             "> establishing connection ...",
+             f"> authenticating subject: {name}",
+             "> access granted."]
+    base = ("position:fixed;inset:0;z-index:2147483600;background:#04060a;"
+            "display:flex;flex-direction:column;justify-content:center;padding:0 12%;"
+            "font-family:monospace;color:#5fd49a;font-size:1.05rem;line-height:2;")
+    ph = st.empty()
+    shown = []
+    for ln in lines:
+        shown.append(ln)
+        html = "<br>".join(shown) + "<span style='opacity:.6'>▌</span>"
+        ph.markdown(f"<div style='{base}'>{html}</div>", unsafe_allow_html=True)
+        time.sleep(0.45)
+    time.sleep(0.5)
+    ph.empty()
+
+
+def _sector_transition(title):
+    """C. 作品を開く瞬間の『ACCESSING SECTOR』暗転（switch_pageの直前に呼ぶ）。"""
+    base = ("position:fixed;inset:0;z-index:2147483600;background:#050505;"
+            "display:flex;align-items:center;justify-content:center;text-align:center;"
+            "font-family:monospace;color:#7fd0ff;font-size:1.35rem;letter-spacing:3px;")
+    st.empty().markdown(
+        f"<div style='{base}'>ACCESSING SECTOR<br>// {title}</div>",
+        unsafe_allow_html=True)
+    time.sleep(0.9)
+
+
+def render_portal_footer():
+    """B. 画面下に常設するNOXA端末ステータスバー。"""
+    name = noxa.state().get("player", "guest")
+    now = datetime.datetime.now().strftime("%H:%M")
+    cc = noxa.clear_count()
+    st.markdown(
+        f"<div class='noxa-footer'>NOXA SYS v2.3.4 ｜ MONITORING ｜ Subject: {name} ｜ "
+        f"cleared {cc}/{len(noxa.GAME_KEYS)} ｜ {now}</div>", unsafe_allow_html=True)
+
+
+_SYS_TICKER = ["archive synced", "memory index nominal", "subject observed",
+               "sector 7 sealed", "404 — monitoring", "containment stable",
+               "backup completed", "trace re-routed"]
+
+
+def render_system_ticker():
+    """E. 流れるシステム音声テロップ。"""
+    line = "　•　".join(f"&gt; {t}" for t in _SYS_TICKER)
+    st.markdown(f"<div class='noxa-ticker'><span>{line}　•　{line}</span></div>",
+                unsafe_allow_html=True)
+
+
+def render_red_woman():
+    """D. 進行度に応じて、画面隅を赤い影が一瞬よぎる（セッション1回だけ抽選）。"""
+    if st.session_state.get("_rw_done"):
+        return
+    st.session_state["_rw_done"] = True
+    try:
+        lvl = noxa.red_woman_level()
+    except Exception:
+        lvl = 0
+    prob = [0.0, 0.2, 0.4, 0.7][lvl] if 0 <= lvl <= 3 else 0.7
+    if random.random() < prob:
+        st.markdown("<div class='noxa-redwoman'></div>", unsafe_allow_html=True)
 
 
 # ==========================================================================
@@ -469,9 +606,12 @@ def chat404():
 
     # ⑦ 404の記憶断片（深夜チャットで低確率・セッション1回抽選）
     if "_chat_frag" not in st.session_state:
-        frags = noxa.MEMORY_FRAGMENTS
-        st.session_state["_chat_frag"] = (
-            frags[random.randrange(len(frags))] if random.random() < 0.45 else None)
+        try:
+            frags = noxa.MEMORY_FRAGMENTS
+            st.session_state["_chat_frag"] = (
+                frags[random.randrange(len(frags))] if random.random() < 0.45 else None)
+        except Exception:
+            st.session_state["_chat_frag"] = None
     if st.session_state["_chat_frag"]:
         st.markdown(
             "<div style='font-family:monospace;color:#8fbf8f;opacity:0.85;"
@@ -827,10 +967,13 @@ def render_portal_header():
 
 def home():
     s = noxa.state()
+    _boot_sequence()           # A. 初回接続の起動演出（セッション1回）
     maybe_fake_error()
+    render_red_woman()         # D. 赤い女が画面隅を一瞬よぎる（進行度で確率）
     render_portal_header()
     st.caption(f"認証者: {s.get('player', 'guest')} さん　／　"
                f"クリア: {noxa.clear_count()} / {len(noxa.GAME_KEYS)}")
+    render_system_ticker()     # E. システム音声テロップ（ティッカー）
 
     render_persist_message()   # ⑨(置換) 累計起動回数のパーソナルメッセージ
     maybe_fake_update()
@@ -890,6 +1033,7 @@ def home():
                 if body.button(f"▶ {g['title']} を遊ぶ", key=f"play_{g['key']}",
                                use_container_width=True):
                     noxa.record_play(g["key"])
+                    _sector_transition(g["title"])   # C. 遷移演出
                     st.switch_page(g["path"])
             else:
                 src = UNLOCK_SOURCE.get(g["key"])
@@ -919,6 +1063,7 @@ def home():
                             unsafe_allow_html=True)
                 body.subheader("Project 000")
             if body.button("▶ Project 000 を起動", key="play_p000", use_container_width=True):
+                _sector_transition("PROJECT 000")   # C. 遷移演出
                 st.switch_page(p000_page)
         else:
             if mobile:
@@ -1018,6 +1163,10 @@ if _target not in noxa.GAME_KEYS:
         "[data-testid='stSidebarCollapsedControl'],"
         "[data-testid='collapsedControl'] { display:none !important; }"
         "</style>", unsafe_allow_html=True)
+    # 演出: 背景データストリーム＋常設ステータスフッター（ポータル系ページ）
+    st.markdown(_PORTAL_FX_CSS, unsafe_allow_html=True)
+    st.markdown("<div class='noxa-bg'></div>", unsafe_allow_html=True)
+    render_portal_footer()
 
 # --- ロック: 未解放の作品にURL直アクセスしたら遊ばせない ---
 if _target in noxa.GAME_KEYS and _target not in noxa.unlocked_games():
