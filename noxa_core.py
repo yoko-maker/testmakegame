@@ -138,6 +138,54 @@ def _now_str():
         return ""
 
 
+# --------------------------------------------------------------------------
+# スマホ / PC 対応
+# --------------------------------------------------------------------------
+def is_mobile():
+    """User-Agent からスマホ系端末かどうかを推定する（取得不可なら False）。"""
+    try:
+        ua = (st.context.headers.get("User-Agent", "") or "")
+    except Exception:
+        return False
+    return bool(re.search(r"Mobi|Android|iPhone|iPad|iPod|Windows Phone", ua, re.I))
+
+
+# 画面幅に応じた共通レスポンシブCSS（グリッド型ミニゲームは崩さない安全な範囲）
+RESPONSIVE_CSS = """
+<style>
+@media (max-width: 640px) {
+    .block-container { padding: 0.9rem 0.6rem !important; }
+    h1 { font-size: 1.5rem !important; letter-spacing: 1px !important; line-height: 1.25 !important; }
+    h2 { font-size: 1.2rem !important; letter-spacing: 0.5px !important; }
+    h3 { font-size: 1.05rem !important; letter-spacing: 0.5px !important; }
+    /* ボタンを押しやすく＆文字あふれ防止 */
+    .stButton > button {
+        padding: 0.5rem 0.5rem !important;
+        font-size: 0.9rem !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+    }
+    /* 横スクロール防止 */
+    .stApp, .block-container { overflow-x: hidden !important; }
+    /* 大きすぎる装飾文字（スロット/ハングマン等の特大表示）を縮小 */
+    div[style*="font-size:72px"], div[style*="font-size:80px"],
+    div[style*="font-size: 72px"], div[style*="font-size: 80px"] {
+        font-size: 44px !important;
+        letter-spacing: 6px !important;
+    }
+}
+</style>
+"""
+
+
+def inject_responsive():
+    """共通レスポンシブCSSを注入する（ポータル本体で1回呼べば全ページに効く）。"""
+    try:
+        st.markdown(RESPONSIVE_CSS, unsafe_allow_html=True)
+    except Exception:
+        pass
+
+
 def obs():
     s = state()
     if not isinstance(s.get("obs"), dict):

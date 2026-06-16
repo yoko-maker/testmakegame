@@ -831,6 +831,10 @@ def page_ending():
     if st.button("🔄 もう一度挑戦する", use_container_width=True):
         reset_game()
         st.rerun()
+    if st.session_state.get("_in_portal"):
+        if st.button("🏠 ポータルに戻る", use_container_width=True, key="lz_back_portal"):
+            st.session_state["_noxa_go_home"] = True
+            st.rerun()
 
 
 # ==========================================================================

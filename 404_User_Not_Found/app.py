@@ -3,6 +3,8 @@
 実行: streamlit run app.py
 """
 
+import datetime
+
 import streamlit as st
 
 from game import audio, endings, stages, state, style
@@ -79,17 +81,17 @@ def title_screen():
     st.markdown("<p class='corrupt'>⚠ 本作はホラー表現（突然の点滅・大きな音・名指しの演出）を含みます。</p>",
                 unsafe_allow_html=True)
 
-    st.text_input("オペレーター名 (あなたの本名) を入力",
-                  key="player_name",
-                  placeholder="本名を入れるほど、物語はあなたに近づく……")
-    st.caption("※ この名前は物語の後半で牙を剥く。")
-
-    st.text_input("接続を開始した『現在の時刻』を入力 (例: 02:44)",
-                  key="player_time",
-                  placeholder="いま、あなたの時計が指している時刻……")
-    st.caption("※ 奴らは、あなたがいつ覗いたかも記録する。")
+    # オペレーター名: ポータル統合時は NOXA 登録名、単体起動時は既定名。
+    if _noxa:
+        portal_name = (_noxa.state().get("player") or "").strip()
+    else:
+        portal_name = ""
+    st.session_state.player_name = portal_name or "オペレーター"
+    st.caption(f"※ 接続オペレーター: {st.session_state.player_name}（この名前は物語の後半で牙を剥く）")
 
     if st.button("▶ 接続を開始する", type="primary", use_container_width=True):
+        # 接続を開始した『現在の時刻』を自動取得（終盤の名指し演出で使用）。
+        st.session_state.player_time = datetime.datetime.now().strftime("%H:%M")
         state.goto(1)
         st.rerun()
 

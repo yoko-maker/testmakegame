@@ -115,6 +115,11 @@ def show():
                 "周回せずとも1周で全フラグを揃えられる。")
 
     st.divider()
+    if st.session_state.get("_in_portal"):
+        if st.button("🏠 ポータルに戻る", use_container_width=True, key="arg_back_portal"):
+            st.session_state["_noxa_go_home"] = True
+            st.rerun()
+
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🔁 周回プレイ (NEW GAME +)", use_container_width=True):

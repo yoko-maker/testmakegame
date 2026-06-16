@@ -402,6 +402,35 @@ def render_master():
             if _noxa:
                 _noxa.report_clear("arcade")
 
+    # --- アーケードのクリア条件と進捗を明示する ---
+    cleared = count >= total
+    st.progress(count / total, text=f"マスターの話 {count} / 全{total} 解放")
+    if cleared:
+        st.success(
+            "✅ アーケード制覇（マスターの全てを聞いた）\n\n"
+            "マスターの独白がすべて解放され、このアーケードは「クリア」扱いになった。"
+        )
+    else:
+        # ポータル統合時は他5作品クリアが条件、単体起動時はこのアプリ内クリア回数が条件
+        clears = master_clear_count()
+        # あと何回クリアすれば最終話（＝制覇）に届くか
+        final_threshold = MASTER_MONOLOGUES[-1][0]
+        remain = max(final_threshold - clears, 0)
+        if _noxa:
+            st.warning(
+                "🎯 **このアーケードのクリア条件**\n\n"
+                "ポータルの他の作品をクリアすると、マスターが少しずつ過去を語り出す。"
+                "他の作品をすべてクリアしてマスターの最終話まで解放すると、"
+                f"このアーケードが**クリア扱い**になる。（あと {remain} 作品）"
+            )
+        else:
+            st.warning(
+                "🎯 **このアーケードのクリア条件**\n\n"
+                "ゲームをクリアするたびにマスターが少しずつ過去を語り出す。"
+                "クリアを重ねてマスターの最終話まで解放すると、"
+                f"このアーケードが**クリア扱い**になる。（あと {remain} 回クリア）"
+            )
+
     with st.expander(f"マスターの話を読み返す（{count} / {total} 解放済み）"):
         clears = master_clear_count()
         for i, (threshold, line) in enumerate(MASTER_MONOLOGUES):
@@ -786,32 +815,83 @@ def game_memory():
 # --------------------------------------------------------------------------
 # ゲーム4: クイズ
 # --------------------------------------------------------------------------
-QUIZ = [
+# 問題プール（20〜30問）。難易度・ジャンルにばらつきを持たせている。
+# 毎プレイ QUIZ_PER_GAME 問をランダム抽出して出題する。
+QUIZ_POOL = [
+    # --- 地理・自然 ---
     {"q": "日本で一番高い山は？", "choices": ["富士山", "北岳", "槍ヶ岳", "御嶽山"], "answer": 0},
+    {"q": "世界で一番広い海洋は？", "choices": ["大西洋", "インド洋", "北極海", "太平洋"], "answer": 3},
+    {"q": "世界で一番長い川は？", "choices": ["アマゾン川", "ナイル川", "長江", "ミシシッピ川"], "answer": 1},
+    {"q": "日本の首都は？", "choices": ["大阪", "京都", "東京", "名古屋"], "answer": 2},
+    {"q": "世界で一番面積が大きい国は？", "choices": ["カナダ", "中国", "アメリカ", "ロシア"], "answer": 3},
+    {"q": "砂漠で最も広いのは？", "choices": ["ゴビ砂漠", "サハラ砂漠", "カラハリ砂漠", "タクラマカン砂漠"], "answer": 1},
+    # --- 理科・自然現象 ---
     {"q": "光の三原色に含まれないのは？", "choices": ["赤", "緑", "青", "黄"], "answer": 3},
     {"q": "1年で最も昼が長い日は？", "choices": ["春分", "夏至", "秋分", "冬至"], "answer": 1},
     {"q": "「H2O」は何の化学式？", "choices": ["二酸化炭素", "酸素", "水", "塩"], "answer": 2},
-    {"q": "世界で一番広い海洋は？", "choices": ["大西洋", "インド洋", "北極海", "太平洋"], "answer": 3},
+    {"q": "虹は何色とされることが多い？", "choices": ["3色", "5色", "7色", "9色"], "answer": 2},
+    {"q": "地球から一番近い恒星は？", "choices": ["月", "火星", "太陽", "シリウス"], "answer": 2},
+    {"q": "音が伝わる速さが最も速いのは？", "choices": ["真空", "空気", "水", "鉄"], "answer": 3},
+    {"q": "成人の体温として平熱に近いのは？", "choices": ["30度", "36度", "40度", "42度"], "answer": 1},
+    {"q": "水が凍る温度は（セ氏）？", "choices": ["0度", "10度", "-10度", "100度"], "answer": 0},
+    # --- 数学 ---
     {"q": "正五角形の内角の合計は？", "choices": ["360度", "540度", "720度", "900度"], "answer": 1},
+    {"q": "三角形の内角の和は？", "choices": ["90度", "180度", "270度", "360度"], "answer": 1},
+    {"q": "100を素因数分解すると 2の累乗 × 5の累乗。5は何乗？", "choices": ["1乗", "2乗", "3乗", "4乗"], "answer": 1},
+    {"q": "1ダースはいくつ？", "choices": ["6", "10", "12", "24"], "answer": 2},
+    # --- 一般常識・生活 ---
     {"q": "サッカーで1チームの出場人数は？", "choices": ["9人", "10人", "11人", "12人"], "answer": 2},
     {"q": "日本の通貨単位は？", "choices": ["ウォン", "円", "元", "ドル"], "answer": 1},
     {"q": "1日は何時間？", "choices": ["12時間", "24時間", "36時間", "48時間"], "answer": 1},
-    {"q": "虹は何色とされることが多い？", "choices": ["3色", "5色", "7色", "9色"], "answer": 2},
+    {"q": "1時間は何分？", "choices": ["30分", "60分", "100分", "120分"], "answer": 1},
+    {"q": "信号機で「進め」を表す色は？", "choices": ["赤", "黄", "青(緑)", "白"], "answer": 2},
+    {"q": "野球で1チームの守備人数は？", "choices": ["7人", "9人", "11人", "12人"], "answer": 1},
+    # --- 文化・言語 ---
+    {"q": "「春はあけぼの」で始まる随筆は？", "choices": ["源氏物語", "枕草子", "徒然草", "方丈記"], "answer": 1},
+    {"q": "アルファベットは全部で何文字？", "choices": ["24文字", "26文字", "28文字", "30文字"], "answer": 1},
+    {"q": "オリンピックは原則何年ごとに開催？", "choices": ["2年", "3年", "4年", "5年"], "answer": 2},
+    {"q": "「赤」を英語で言うと？", "choices": ["blue", "green", "red", "yellow"], "answer": 2},
+    # --- ちょっとした雑学（隠し設定との小ネタ含む） ---
+    {"q": "Webで「ページが見つからない」を表すエラー番号は？", "choices": ["200", "301", "404", "500"], "answer": 2},
+    {"q": "「エコー(echo)」の意味は？", "choices": ["反響・こだま", "稲妻", "霧", "潮流"], "answer": 0},
 ]
+QUIZ_PER_GAME = 8  # 1プレイあたりの出題数（プールからランダム抽出）
+
+# 既存参照・互換のために残す（実績表示などで全問数の目安に使えるよう）
+QUIZ = QUIZ_POOL
+
+
+def setup_quiz():
+    """問題プールから QUIZ_PER_GAME 問をランダム抽出して出題セットを作る。"""
+    n = min(QUIZ_PER_GAME, len(QUIZ_POOL))
+    st.session_state.qz_set = random.sample(QUIZ_POOL, n)
+    st.session_state.qz_index = 0
+    st.session_state.qz_score = 0
+    st.session_state.qz_answered = False
+    st.session_state.qz_finished = False
+    st.session_state.qz_awarded = False
 
 
 def game_quiz():
     st.header("❓ クイズ")
-    st.caption("全 {} 問の4択クイズ。正解ごとに +5コイン！".format(len(QUIZ)))
+    st.caption(
+        f"全 {len(QUIZ_POOL)} 問のプールから毎回 {QUIZ_PER_GAME} 問をランダム出題する4択クイズ。"
+        f"正解ごとに +5コイン！"
+    )
 
+    # 出題セットが無ければ作成（初回 / リプレイ時）
+    if "qz_set" not in st.session_state:
+        setup_quiz()
     init_state("qz_index", 0)
     init_state("qz_score", 0)
     init_state("qz_answered", False)
     init_state("qz_finished", False)
     init_state("qz_awarded", False)
 
+    quiz_set = st.session_state.qz_set
+    total = len(quiz_set)
+
     if st.session_state.qz_finished:
-        total = len(QUIZ)
         score = st.session_state.qz_score
         # 完了報酬（1回だけ）
         if not st.session_state.qz_awarded:
@@ -828,18 +908,14 @@ def game_quiz():
             st.write("**なかなかの好成績！** 👍")
         else:
             st.write("**次はもっといけるはず！** 💪")
-        if st.button("もう一度", key="qz_replay"):
-            st.session_state.qz_index = 0
-            st.session_state.qz_score = 0
-            st.session_state.qz_answered = False
-            st.session_state.qz_finished = False
-            st.session_state.qz_awarded = False
+        if st.button("もう一度（新しい問題で）", key="qz_replay"):
+            setup_quiz()
             st.rerun()
         return
 
     idx = st.session_state.qz_index
-    item = QUIZ[idx]
-    st.progress((idx) / len(QUIZ), text=f"第 {idx + 1} 問 / {len(QUIZ)}")
+    item = quiz_set[idx]
+    st.progress(idx / total, text=f"第 {idx + 1} 問 / {total}")
     st.subheader(item["q"])
 
     if not st.session_state.qz_answered:
@@ -856,10 +932,10 @@ def game_quiz():
             st.success("⭕ 正解！ +5コイン")
         else:
             st.error(f"❌ 不正解… 正解は「{item['choices'][item['answer']]}」")
-        label = "結果を見る" if idx + 1 == len(QUIZ) else "次の問題へ"
+        label = "結果を見る" if idx + 1 == total else "次の問題へ"
         if st.button(label, key=f"qz_next_{idx}"):
             st.session_state.qz_answered = False
-            if idx + 1 == len(QUIZ):
+            if idx + 1 == total:
                 st.session_state.qz_finished = True
             else:
                 st.session_state.qz_index += 1

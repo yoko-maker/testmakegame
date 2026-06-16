@@ -452,15 +452,28 @@ def project000():
     step = st.session_state.p000_step
     total = len(P000_PARTS)
 
-    for i in range(min(step + 1, total)):
-        title, body = P000_PARTS[i]
+    def _box_full(i):
+        t, b = P000_PARTS[i]
+        return _p000_box(i + 1, t, b(name).replace("\n", "<br>"))
+
+    # step より前のセクターは確定表示。全体を1要素にまとめて描くことで、
+    # 複数プレースホルダの重なりによる「前の文がうっすら残る」現象を防ぐ。
+    completed = "".join(_box_full(i) for i in range(step))
+    if step in typed:
+        st.markdown(completed + _box_full(step), unsafe_allow_html=True)
+    else:
         ph = st.empty()
-        if i in typed:
-            ph.markdown(_p000_box(i + 1, title, body(name).replace("\n", "<br>")),
-                        unsafe_allow_html=True)
-        else:
-            _type_into(ph, i + 1, title, body(name))
-            typed.add(i)
+        title, body = P000_PARTS[step]
+        shown = ""
+        for ch in body(name):
+            shown += ch
+            cur = _p000_box(step + 1, title,
+                            shown.replace("\n", "<br>")
+                            + "<span style='opacity:.7'>▌</span>")
+            ph.markdown(completed + cur, unsafe_allow_html=True)
+            time.sleep(0.02)
+        ph.markdown(completed + _box_full(step), unsafe_allow_html=True)
+        typed.add(step)
 
     if step + 1 < total:
         if st.button("▶ 次へ", use_container_width=True, key="p000_next"):
@@ -663,53 +676,67 @@ def home():
     if announced:
         noxa.save()
 
+    mobile = noxa.is_mobile()
     for g in GAMES:
         is_unlocked = g["key"] in unlocked
         cleared = noxa.is_cleared(g["key"])
         with st.container(border=True):
-            c1, c2 = st.columns([1, 4])
-            if is_unlocked:
-                c1.markdown(f"<div style='font-size:52px;text-align:center;'>{g['icon']}</div>",
-                            unsafe_allow_html=True)
-                with c2:
-                    badge = " ✅クリア済" if cleared else ""
-                    st.subheader(f"{g['title']}{badge}")
-                    if st.button(f"▶ {g['title']} を遊ぶ", key=f"play_{g['key']}",
-                                 use_container_width=True):
-                        noxa.record_play(g["key"])
-                        st.switch_page(g["path"])
+            # スマホではアイコン列を省き1カラム、PCでは [アイコン | 内容] の2カラム
+            if mobile:
+                body = st
             else:
-                c1.markdown("<div style='font-size:52px;text-align:center;opacity:.4;'>🔒</div>",
-                            unsafe_allow_html=True)
-                with c2:
-                    st.subheader("？？？")
-                    src = UNLOCK_SOURCE.get(g["key"])
-                    # 解放条件は「その前作が既に解放されている」場合のみ提示し、
-                    # 先のチェーンをいきなり全部ネタバレしない。
-                    if src and src in unlocked:
-                        st.caption(f"「{noxa.GAME_TITLES.get(src, '前作')}」をクリアすると解放")
-                    else:
-                        st.caption("？？？")
-                    st.write("ロックされた作品。")
+                c1, c2 = st.columns([1, 4])
+                body = c2
+            if is_unlocked:
+                badge = " ✅クリア済" if cleared else ""
+                if mobile:
+                    body.subheader(f"{g['icon']} {g['title']}{badge}")
+                else:
+                    c1.markdown(f"<div style='font-size:52px;text-align:center;'>{g['icon']}</div>",
+                                unsafe_allow_html=True)
+                    body.subheader(f"{g['title']}{badge}")
+                if body.button(f"▶ {g['title']} を遊ぶ", key=f"play_{g['key']}",
+                               use_container_width=True):
+                    noxa.record_play(g["key"])
+                    st.switch_page(g["path"])
+            else:
+                src = UNLOCK_SOURCE.get(g["key"])
+                hint = (f"「{noxa.GAME_TITLES.get(src, '前作')}」をクリアすると解放"
+                        if (src and src in unlocked) else "？？？")
+                if mobile:
+                    body.subheader("🔒 ？？？")
+                else:
+                    c1.markdown("<div style='font-size:52px;text-align:center;opacity:.4;'>🔒</div>",
+                                unsafe_allow_html=True)
+                    body.subheader("？？？")
+                body.caption(hint)
+                body.write("ロックされた作品。")
 
     # 最終作品 Project 000（全作品クリアで解放）
     with st.container(border=True):
-        c1, c2 = st.columns([1, 4])
-        if noxa.project000_unlocked():
-            c1.markdown("<div style='font-size:52px;text-align:center;'>🌀</div>",
-                        unsafe_allow_html=True)
-            with c2:
-                st.subheader("Project 000")
-                if st.button("▶ Project 000 を起動", key="play_p000",
-                             use_container_width=True):
-                    st.switch_page(p000_page)
+        if mobile:
+            body = st
         else:
-            c1.markdown("<div style='font-size:52px;text-align:center;opacity:.4;'>🌀</div>",
-                        unsafe_allow_html=True)
-            with c2:
-                st.subheader("█████ 000")
-                st.caption("全作品クリアで解放")
-                st.write("存在だけが示唆された、最後の何か。")
+            c1, c2 = st.columns([1, 4])
+            body = c2
+        if noxa.project000_unlocked():
+            if mobile:
+                body.subheader("🌀 Project 000")
+            else:
+                c1.markdown("<div style='font-size:52px;text-align:center;'>🌀</div>",
+                            unsafe_allow_html=True)
+                body.subheader("Project 000")
+            if body.button("▶ Project 000 を起動", key="play_p000", use_container_width=True):
+                st.switch_page(p000_page)
+        else:
+            if mobile:
+                body.subheader("🌀 █████ 000")
+            else:
+                c1.markdown("<div style='font-size:52px;text-align:center;opacity:.4;'>🌀</div>",
+                            unsafe_allow_html=True)
+                body.subheader("█████ 000")
+            body.caption("全作品クリアで解放")
+            body.write("存在だけが示唆された、最後の何か。")
 
     # 404クリア後の隠し導線「Find me.」
     if noxa.is_cleared("arg"):
@@ -761,6 +788,16 @@ chat_page = st.Page(chat404, title="404", icon="📡", url_path="chat404")
 # サイドバーへ自動挿入されるメニューは出さない（各ゲームのサイドバーに干渉しないため）
 nav = st.navigation([home_page] + game_pages + [void_page, p000_page, chat_page],
                     position="hidden")
+
+# 共通レスポンシブCSS（ここで1回入れると以降のゲームページ描画にも効く）
+noxa.inject_responsive()
+
+# ポータル統合中であることを各ゲームへ知らせる（「ポータルに戻る」ボタン表示の判定用）
+st.session_state["_in_portal"] = True
+
+# 各ゲームのクリア画面から「ポータルに戻る」が押されたらホームへ遷移
+if st.session_state.pop("_noxa_go_home", False):
+    st.switch_page(home_page)
 
 # --- 初回接続: プレイヤー名が無ければ認証ゲートを出して停止 ---
 _s = noxa.state()

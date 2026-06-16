@@ -737,6 +737,10 @@ def fail_screen(code, role):
     if st.button("♻ ルームを再起動（同じ施設・最初から）", use_container_width=True):
         restart_room(code)
         app_rerun()
+    if st.session_state.get("_in_portal"):
+        if st.button("🏠 ポータルに戻る", use_container_width=True, key="pl_back_portal_fail"):
+            st.session_state["_noxa_go_home"] = True
+            st.rerun()
 
 
 def ending_screen(code, role):
@@ -811,6 +815,10 @@ def ending_screen(code, role):
     if st.button("♻ もう一度遊ぶ（新しい施設）", use_container_width=True):
         restart_room(code)
         app_rerun()
+    if st.session_state.get("_in_portal"):
+        if st.button("🏠 ポータルに戻る", use_container_width=True, key="pl_back_portal_end"):
+            st.session_state["_noxa_go_home"] = True
+            st.rerun()
 
 
 # ==========================================================================

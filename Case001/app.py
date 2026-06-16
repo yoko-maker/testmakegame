@@ -731,18 +731,21 @@ def view_timeline():
 def page_interrogate():
     st.header("🔦 容疑者の追及")
     st.markdown(
-        "**進め方:**　①追及する容疑者を選ぶ　→　②今出ている証言を読む　→　"
-        "③その証言を崩せる証拠を1つ選んで突きつける。\n\n"
-        "証言は**二段構え**。各段で“鍵となる証拠”は異なる。正しい証拠を順に突きつけると、その容疑者の白黒が確定する。"
+        "**進め方**\n\n"
+        "1. 下のリストから **追及する容疑者** を1人選ぶ。\n"
+        "2. その容疑者が今している **証言** を読む（証言は二段構えで、第1段→第2段と進む）。\n"
+        "3. 手持ちの証拠の中から、**その証言の矛盾を突ける証拠を1つ** 選んで突きつける。\n\n"
+        "正しい証拠を突きつけると証言が1段崩れる。全段を崩しきると、その容疑者が **クロ（犯人の疑い濃厚）** か "
+        "**シロ（容疑圏外）** かが確定する。各段で有効な証拠は1つだけなので、証言の内容と証拠をよく照らし合わせよう。"
     )
 
     credit = st.session_state.case_credit
     st.markdown(f"**🛡️ 捜査信用度:** {'❤️' * credit}{'🖤' * (MAX_CREDIT - credit)}")
-    st.caption("⚠️ 見当違いの証拠を突きつけると信用度が1減る。0になると捜査失格(Bad End)。")
+    st.caption("⚠️ 証言と関係のない証拠を突きつけると信用度が1減る。0になると捜査失格(Bad End)。")
 
     evs = list(st.session_state.case_evidences)
     if not evs:
-        st.warning("まだ証拠がない。先に解析を進めよう。")
+        st.warning("まだ証拠が1つもない。証拠がなければ証言は崩せない。先に捜査ボードで解析を進めよう。")
         if st.button("↩️ 捜査ボードに戻る"):
             goto("board")
         return
@@ -755,10 +758,10 @@ def page_interrogate():
         st_idx = st.session_state.case_stage.get(s, 0)
         total = len(INTERROGATION[s]["stages"])
         if s in verdicts:
-            mark = "🔴 クロ（容疑濃厚）" if verdicts[s] == "クロ" else "🟢 シロ（容疑圏外）"
+            mark = "🔴 クロ（犯人の疑い濃厚）" if verdicts[s] == "クロ" else "🟢 シロ（容疑圏外）"
             st.caption(f"・{s}　― ✅ 追及完了：{mark}")
         elif st_idx > 0:
-            st.caption(f"・{s}　― ⏳ 追及中（第{st_idx + 1}段／全{total}段）")
+            st.caption(f"・{s}　― ⏳ 追及中（第{st_idx + 1}段／全{total}段が残り）")
         else:
             st.caption(f"・{s}　― ⬜ 未着手（全{total}段）")
 
@@ -775,18 +778,30 @@ def page_interrogate():
 
     # すでに崩した証言を表示
     for i in range(stage_idx):
-        st.success(f"✅ 第{i + 1}段クリア　「{stages[i]['claim']}」\n\n→ {stages[i]['break']}")
+        st.success(
+            f"✅ 第{i + 1}段／全{len(stages)}段：崩した証言\n\n"
+            f"🗨️ {short}:「{stages[i]['claim']}」\n\n"
+            f"📎 突きつけた証拠 →「{stages[i]['key']}」\n\n"
+            f"💥 {stages[i]['break']}"
+        )
 
     if resolved:
-        badge = "🔴 クロ（容疑濃厚）" if verdicts[sel] == "クロ" else "🟢 シロ（容疑圏外）"
+        badge = "🔴 クロ（犯人の疑い濃厚）" if verdicts[sel] == "クロ" else "🟢 シロ（容疑圏外）"
         st.markdown(f"### 🎯 {short} の追及完了 ― {badge}")
+        st.caption(f"{short} の証言はすべて崩した。判定は確定済みなので、これ以上の追及は不要だ。")
     else:
         cur = stages[stage_idx]
-        st.info(f"② 現在の証言【第{stage_idx + 1}段／全{len(stages)}段】\n\n"
-                f"🗨️ {short}:「{cur['claim']}」")
-        st.markdown("③ **この証言を崩せる証拠を1つ選んで突きつけろ:**")
+        st.info(
+            f"② いま対峙している証言 ― 【第{stage_idx + 1}段／全{len(stages)}段】\n\n"
+            f"🗨️ {short}:「{cur['claim']}」\n\n"
+            f"❓ この証言の矛盾を突ける証拠は、手持ちの中のどれか？"
+        )
+        st.markdown(f"③ **下のボタンから証拠を1つ選び、{short} に突きつけろ**（突きつけられるのは取得済みの証拠だけ）:")
         for ev in evs:
-            if st.button(f"📎 「{ev}」を突きつける", key=f"itg_{s_idx}_{stage_idx}_{ev}", use_container_width=True):
+            short_clue = EVIDENCE_CLUE.get(ev, "")
+            if len(short_clue) > 38:
+                short_clue = short_clue[:38] + "…"
+            if st.button(f"📎 証拠「{ev}」を突きつける", key=f"itg_{s_idx}_{stage_idx}_{ev}", use_container_width=True):
                 if ev == cur["key"]:
                     st.session_state.case_stage[sel] = stage_idx + 1
                     if stage_idx + 1 >= len(stages):
@@ -798,10 +813,12 @@ def page_interrogate():
                         st.session_state.case_ending = "blunder"
                     st.session_state.itg_reaction = (
                         sel, stage_idx,
-                        f"《{ev}》を突きつけたが、{short}は動じない。"
-                        "「それが何の関係が？」― 決定打にならず、信用度が下がった。",
+                        f"証拠「{ev}」を突きつけたが、{short} は平然としている。"
+                        "「それが今の話と何の関係が？」― この証言を崩す決め手にはならなかった。"
+                        "（捜査信用度 −1）",
                     )
                 st.rerun()
+            st.caption(f"　└ 内容: {short_clue}")
 
         react = st.session_state.get("itg_reaction")
         if react and react[0] == sel and react[1] == stage_idx:
@@ -809,10 +826,11 @@ def page_interrogate():
 
     st.markdown("---")
     resolved_n = sum(1 for s in SUSPECTS if s in verdicts)
-    st.caption(f"追及の進捗: 完了 {resolved_n}/3")
+    st.caption(f"追及の進捗: 完了 {resolved_n}/3（全員を追及し終えると最終推理で告発できる）")
     if resolved_n == len(SUSPECTS):
-        kuro = [s for s in SUSPECTS if verdicts[s] == "クロ"]
-        st.success("✅ 全員の追及が完了。アリバイが崩れたのは ― " + ("、".join(kuro) if kuro else "誰もいない…？"))
+        kuro = [s.split("（")[0] for s in SUSPECTS if verdicts[s] == "クロ"]
+        st.success("✅ 全員の追及が完了。証言を崩した結果、クロ（犯人の疑い濃厚）と出たのは ― "
+                   + ("、".join(kuro) if kuro else "誰もいない…？"))
 
     if st.button("↩️ 捜査ボードに戻る"):
         st.session_state.itg_reaction = None
@@ -973,6 +991,11 @@ def page_ending():
     if st.button("🔄 もう一度挑戦する", use_container_width=True):
         reset_game()
         st.rerun()
+
+    if st.session_state.get("_in_portal"):
+        if st.button("🏠 ポータルに戻る", use_container_width=True, key="case_back_portal"):
+            st.session_state["_noxa_go_home"] = True
+            st.rerun()
 
 
 # ==========================================================================
