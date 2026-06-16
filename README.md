@@ -24,13 +24,27 @@ streamlit run app.py              # ← これ1つで全作品にアクセス
 | [404_User_Not_Found/](404_User_Not_Found/) | 🛑 404 User Not Found | ARG／謎解きホラー | ✅ 完成 |
 | [CoOp_PairLock/](CoOp_PairLock/) | 🔒 PAIR LOCK | 2人協力・非対称情報の暗号脱出 | ✅ 完成 |
 
-## 🌐 共通の世界観（隠しテーマ）
+## 🌐 NOXA Universe（ポータル全体の隠し物語）
 
-6作品は単体で完結しつつ、背景でゆるく繋がっています。各作品の事件・施設は
+6作品は単体で完結しつつ、ポータル全体が一つのメタ物語になっています。各作品の事件・施設は
 巨大研究組織 **ノクサ研究機構（NOXA Institute）** に連なり、意識をAIへ写す
-**プロジェクト「ECHO」**、繰り返し現れる数字 **「404」**、相次ぐ研究者の失踪が
-共通モチーフ。ログや台詞の隅、ニュースの片隅に散らした、気づく人だけ気づく仕掛けです。
-全部遊ぶと「同じ組織の別施設の物語だった」と分かります。
+**プロジェクト「ECHO」**、繰り返し現れる数字 **「404」**、相次ぐ研究者の失踪、
+創設者 **天城 真**、映像の隅の **赤い女** が共通モチーフ。
+
+ポータルにはこの体験を支えるメタ進行システムがあります（実装: [noxa_core.py](noxa_core.py)）。
+
+- **接続認証**: 初回にプレイヤー名を入力。進行は名前をキーに `noxa_saves/` へ保存され、
+  ブラウザを閉じても続きから遊べる。
+- **段階解放**: 最初は2作品のみ。クリアで次の作品が順に解放される
+  （消えた研究者 → ECHO → 404 → PAIR LOCK → LAST 30 MINUTES → **Project 000**）。
+- **共通調査ボード**: クリアごとに「天城 真」「被験者404」「ECHO」等の調査項目が埋まり、真相マップが完成する。
+- **ホームの変質**: クリアが進むとポータル名がグリッチし、`Connection Lost` → `Monitoring User...` →
+  `NOXA Monitoring System` と侵食。終盤「あなたも観察対象です」。
+- **隠しページ `/void`**: 404クリア後、ログ末尾の「Find me.」からNOXA内部資料へ。
+- **最終作品 Project 000**: 全作品クリアで解放。全事件の真相と最終どんでん返しを回収する。
+- **深夜イベント**: 00:00〜04:04 はホームに `404 ONLINE` が現れる。
+
+> 設計の元になった構想は [変更案.md](変更案.md) を参照。
 
 ## 🎮 各作品の概要
 
@@ -118,13 +132,19 @@ push 後、数分でクラウドの公開URLに反映される（手動操作は
 
 ### 新しいゲームを追加するとき
 1. 新フォルダ＋ `app.py` を作成（先頭の `st.set_page_config` は既存ゲームに倣い `try/except` で包む）
-2. ルート `app.py` の `GAMES` リストに1項目追加
+2. ルート `app.py` の `GAMES` リストに1項目追加（`key` が NOXA進行のキー＝URL）
    ```python
-   {"path": "新フォルダ/app.py", "title": "...", "icon": "🎲", "url": "newgame",
+   {"key": "newgame", "path": "新フォルダ/app.py", "title": "...", "icon": "🎲",
     "genre": "...", "desc": "..."},
    ```
-3. 通常ゲーム同様の「ポータルに戻る」を出すなら `RETURN_URLS` にも `"newgame"` を追加
+3. NOXA進行に組み込むなら [noxa_core.py](noxa_core.py) の `GAME_KEYS` / `GAME_TITLES` /
+   `UNLOCK_CHAIN` / `BOARD_REVEAL` に追記し、新ゲームのクリア地点で
+   `import noxa_core` → `report_clear("newgame")` を呼ぶ（import は try/except で包む）
 4. push
+
+### NOXA Universe のメタ進行を編集するとき
+解放順・調査ボード・ホーム進化のルールはすべて [noxa_core.py](noxa_core.py) に集約。
+進行のリセットは `noxa_saves/<名前>.json` を削除すればよい（gitignore 済み）。
 
 ### 安全に試したいとき（任意）
 ```bash
@@ -141,6 +161,9 @@ git checkout -b feature/xxx   # 作業ブランチ
 ## 🛠️ 技術メモ
 
 - すべて Python + Streamlit 製。状態は `st.session_state` で管理。
+- **NOXA Universe メタ層**: 作品横断の進行・解放・調査ボード・ファイル永続化は
+  [noxa_core.py](noxa_core.py) に集約。各ゲームは `report_clear("<key>")` を1か所呼ぶだけで、
+  import を `try/except` で包むため単体起動でも壊れない。進行は `noxa_saves/<名前>.json` に保存。
 - 5作品は単一の `app.py` 構成。**404 User Not Found のみ最ボリューム（暗号・音声・画像演出が多い）のため、
   意図的に `game/` パッケージへ分割**している（`app.py` ＋ `game/` 内の state / stages / minigames /
   ciphers / endings / events / images / audio / style / lore）。ポータルはこのパッケージを解決するため

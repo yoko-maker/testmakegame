@@ -23,6 +23,12 @@ try:
 except Exception:
     pass  # ポータルに統合された場合は無視
 
+# NOXA Universe（ポータル統合時のみ利用可能 / 単体起動では import 失敗を無視）
+try:
+    import noxa_core as _noxa
+except Exception:
+    _noxa = None
+
 
 # ==========================================================================
 # 共通システム（コイン経済・プロフィール・実績）
@@ -201,6 +207,8 @@ def render_master():
         # 最終段階まで聞いたら実績
         if count >= total:
             unlock("listener")
+            if _noxa:
+                _noxa.report_clear("arcade")
 
     with st.expander(f"マスターの話を読み返す（{count} / {total} 解放済み）"):
         for i, (threshold, line) in enumerate(MASTER_MONOLOGUES):
@@ -302,6 +310,8 @@ SECRET_FLAVOR = [
     "画面の隅に小さく「NOXA / ECHO」のロゴが明滅する。",
     "「この数列は、消えた研究者が遺した暗号だ」とマスターは言った。",
     "ログの末尾はいつも同じ番号で途切れている——404。",
+    "再生映像のノイズの奥に、赤い服の女が立っていた気がした……気のせいか。",
+    "起動シーケンスの最後に短く刻印が走る——「A.T. 承認済」。",
 ]
 
 

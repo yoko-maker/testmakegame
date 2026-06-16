@@ -23,3 +23,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# NOXA Universe プレイヤー進行セーブ（ローカル生成・コミットしない）
+noxa_saves/

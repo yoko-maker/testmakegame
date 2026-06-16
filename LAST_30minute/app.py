@@ -22,6 +22,12 @@ try:
 except Exception:
     pass  # ポータルに統合された場合は無視
 
+# NOXA Universe（ポータル統合時のみ利用可能 / 単体起動では import 失敗を無視）
+try:
+    import noxa_core as _noxa
+except Exception:
+    _noxa = None
+
 # 施設定義: (名称, アイコン, フラグキー, ビュー, 成功時メッセージ)
 FACILITIES = [
     ("発電所", "⚡", "lz_power", "calc", "電力復旧"),
@@ -116,6 +122,7 @@ def broadcast(frac):
         return "warning", (
             "📡 ニュース速報: 隕石接近中。全世界が避難を開始。"
             "各地の研究機関から研究者の連絡途絶が相次いでいるとの情報も。"
+            "──無人のはずの避難所の監視映像の隅に、赤い服の女が一瞬だけ映っていた。"
         )
     if frac > 0.1:
         return "warning", "🚨 ニュース速報: 衝突軌道を確認。各都市の病院・避難所が祈るように迎撃を待っている。"
@@ -397,6 +404,8 @@ def view_quiz():
     facility_voice("lz_analysis")
     st.caption("📁 解析端末の片隅に、古い研究ログのタイトルが残っている── "
                "『ECHO-404: 被験者の意識同期記録（破棄予定）』。今は気に留めている時間はない。")
+    st.caption("📁 ログ最終署名: `amagi@noxa.jp`（Amagi Research Center / 承認待ち）。"
+               "差出人の所在は、もう誰も知らない。")
 
     if st.session_state.lz_analysis:
         st.success("✅ 隕石解析は完了済み。")
@@ -587,6 +596,10 @@ def priority_epilogue(ending):
 def page_ending():
     ending = st.session_state.lz_ending
     done = facilities_done()
+    if _noxa:
+        _noxa.report_clear("last30")
+        if st.session_state.get("lz_priority"):
+            _noxa.set_choice("last30_priority", st.session_state.lz_priority)
 
     if ending == "true":
         st.balloons()

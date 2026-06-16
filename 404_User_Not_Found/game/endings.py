@@ -4,6 +4,12 @@ import streamlit as st
 
 from . import audio, state, style
 
+# NOXA Universe（ポータル統合時のみ利用可能 / 単体起動では import 失敗を無視）
+try:
+    import noxa_core as _noxa
+except Exception:
+    _noxa = None
+
 def _endings(name: str, t: str):
     """プレイヤー名・時刻を織り込んだエンディング定義を返す。"""
     time_phrase = f"あの {t} に接続した" if t else "あの夜に接続した"
@@ -69,6 +75,8 @@ def _endings(name: str, t: str):
 
 def show():
     key = state.game().get("ending") or "normal"
+    if _noxa:
+        _noxa.report_clear("arg")
     name = (st.session_state.get("player_name") or "").strip() or "あなた"
     t = (st.session_state.get("player_time") or "").strip()
     endings = _endings(name, t)

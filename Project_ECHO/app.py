@@ -26,6 +26,12 @@ try:
 except Exception:
     pass  # ポータルに統合された場合は無視
 
+# NOXA Universe（ポータル統合時のみ利用可能 / 単体起動では import 失敗を無視）
+try:
+    import noxa_core as _noxa
+except Exception:
+    _noxa = None
+
 NUMWORDS = ["ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"]
 
 ROOM_ORDER = ["lobby", "lab", "monitor", "server", "central"]
@@ -146,6 +152,8 @@ RESEARCH_LOGS = {
             "おかしいのは、その日からECHOの応答が急に“人間らしく”なったことだ。"
             "言い回しの癖が、主任にそっくりなのだ。No.404の転写台に、"
             "誰が最後に横たわったのか——誰も口にしない。"
+            "（深夜帯の監視映像。廊下の隅に、赤い服の女が一瞬だけ映り込んでいる。"
+            "職員名簿に該当者なし。次のフレームでは、もういない。）"
         ),
         "hint": "監視記録 ―",
     },
@@ -587,7 +595,8 @@ def room_secret():
     st.write(
         "通気口の先は、図面に存在しない小部屋だった。中央には埃をかぶった**転写台**——"
         "そして **ECHO直通コンソール** が脈打つように光っている。"
-        "台のプレートには『被験体No.404 ／ 主任研究員 霧島』と刻まれている。"
+        "台のプレートには『被験体No.404 ／ 主任研究員 霧島』と刻まれ、"
+        "承認欄の隅には色褪せた判で『プロジェクトECHO 最終承認：A.T.承認済（所長 天城）』とある。"
     )
 
     if st.session_state.echo_secret:
@@ -685,6 +694,8 @@ def room_central():
 def page_ending():
     ending = st.session_state.echo_ending
     code = st.session_state.echo_code
+    if _noxa:
+        _noxa.report_clear("echo")
 
     if ending == "true":
         st.balloons()
