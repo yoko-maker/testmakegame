@@ -28,6 +28,144 @@ try:
 except Exception:
     _noxa = None
 
+
+# ==========================================================================
+# 没入テーマ (緊急指令室 / 世界崩壊カウントダウン)
+#   暗背景 + 赤の非常警告色、モノスペース見出し、控えめな非常灯の点滅、走査線。
+#   走査線/オーバーレイは pointer-events:none で操作を妨げない。
+# ==========================================================================
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Share+Tech+Mono&display=swap');
+
+/* ── 指令室の暗い基調 ── */
+.stApp {
+    background:
+        radial-gradient(circle at 50% -8%, rgba(255,40,40,0.10), transparent 55%),
+        radial-gradient(circle at 90% 110%, rgba(255,90,40,0.06), transparent 50%),
+        #08080b;
+    color: #d6d0c4;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* 走査線オーバーレイ（操作を妨げない） */
+.stApp::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0.0) 0px,
+        rgba(0,0,0,0.0) 2px,
+        rgba(0,0,0,0.18) 3px,
+        rgba(0,0,0,0.0) 4px
+    );
+    mix-blend-mode: multiply;
+}
+
+/* 非常灯（画面四隅にじわっと滲む赤、控えめに点滅） */
+.stApp::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9997;
+    box-shadow: inset 0 0 140px rgba(180,0,0,0.0);
+    animation: lz-alarm 4.2s ease-in-out infinite;
+}
+@keyframes lz-alarm {
+    0%, 100% { box-shadow: inset 0 0 120px rgba(180,0,0,0.06); }
+    50%      { box-shadow: inset 0 0 200px rgba(220,20,20,0.22); }
+}
+
+/* ── 見出し: 指令室モニタのモノスペース ── */
+h1, h2, h3 {
+    font-family: 'Orbitron', sans-serif !important;
+    color: #ff3b30 !important;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(255,59,48,0.45), 0 0 2px rgba(255,180,180,0.6);
+}
+h1 {
+    border-bottom: 1px solid rgba(255,59,48,0.35);
+    padding-bottom: 0.3rem;
+}
+p, li, label, .stMarkdown, .stCaption, .stCaption p {
+    color: #c8c2b4 !important;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* ── 指令コンソール風ボタン ── */
+.stButton > button {
+    background: linear-gradient(180deg, rgba(40,12,12,0.85), rgba(18,8,8,0.9));
+    color: #ff6a5e;
+    border: 1px solid #b3261e;
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: inset 0 0 10px rgba(255,40,40,0.08);
+    transition: all 0.12s ease;
+}
+.stButton > button:hover {
+    background: #ff3b30;
+    color: #0b0606;
+    border-color: #ff6a5e;
+    box-shadow: 0 0 16px rgba(255,59,48,0.8), inset 0 0 6px rgba(255,255,255,0.3);
+    text-shadow: none;
+}
+.stButton > button:disabled {
+    color: #5a4a44;
+    border-color: #3a2222;
+    background: rgba(20,12,12,0.6);
+    box-shadow: none;
+}
+
+/* ── 端末風の入力欄 ── */
+.stTextInput input, .stNumberInput input {
+    background: #0c0a08 !important;
+    color: #ff6a5e !important;
+    border: 1px solid #7a1f17 !important;
+    border-radius: 3px !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    letter-spacing: 2px;
+    caret-color: #ff3b30;
+}
+.stTextInput input:focus, .stNumberInput input:focus {
+    border-color: #ff3b30 !important;
+    box-shadow: 0 0 10px rgba(255,59,48,0.4) !important;
+}
+
+/* ── 残り時間モニタ（HUD のタイマーを囲む枠） ── */
+[data-testid="stProgress"] > div > div > div {
+    box-shadow: 0 0 8px rgba(255,59,48,0.5);
+}
+
+/* ── アラート類を指令室パネル調に ── */
+.stAlert {
+    border-left: 3px solid #ff3b30 !important;
+    border-radius: 3px !important;
+    backdrop-filter: blur(1px);
+}
+
+/* サイドバー */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0d0a0a, #080606);
+    border-right: 1px solid rgba(255,59,48,0.25);
+}
+[data-testid="stSidebar"] * { color: #c8c2b4; }
+
+/* メトリクス（迎撃成功率）を非常モニタ風に */
+[data-testid="stMetricValue"] {
+    color: #ff3b30 !important;
+    font-family: 'Orbitron', sans-serif !important;
+    text-shadow: 0 0 10px rgba(255,59,48,0.5);
+}
+</style>
+"""
+
 # 施設定義: (名称, アイコン, フラグキー, ビュー, 成功時メッセージ)
 FACILITIES = [
     ("発電所", "⚡", "lz_power", "calc", "電力復旧"),
@@ -719,6 +857,7 @@ def render_sidebar():
 # メイン
 # ==========================================================================
 init_game()
+st.markdown(CSS, unsafe_allow_html=True)
 render_sidebar()
 
 if _noxa:

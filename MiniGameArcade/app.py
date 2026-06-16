@@ -31,6 +31,141 @@ except Exception:
 
 
 # ==========================================================================
+# 没入テーマ（レトロアーケード筐体 / CRTネオン）
+#   暗い背景＋マゼンタ/シアンのネオン、ピクセル調見出し、ごく薄い走査線。
+#   隅にほんの少しだけ研究端末（元NOXA研究員マスターの擬装）の無機質さを忍ばせる。
+#   見た目だけの追加で、session_state やゲームロジックには一切触れない。
+# ==========================================================================
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@600;800&family=Share+Tech+Mono&display=swap');
+
+.stApp {
+    background:
+        radial-gradient(circle at 50% -8%, rgba(255,46,205,0.10), transparent 55%),
+        radial-gradient(circle at 50% 120%, rgba(0,229,255,0.08), transparent 55%),
+        #0a0612;
+    color: #d6e9f5;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* 見出し：ピクセル/ネオン調。マゼンタ⇄シアンのグロー */
+h1, h2, h3 {
+    font-family: 'Orbitron', sans-serif !important;
+    color: #ff5cf0 !important;
+    letter-spacing: 2px;
+    text-shadow: 0 0 6px rgba(255,46,205,0.6), 0 0 14px rgba(255,46,205,0.35);
+}
+h2, h3 { color: #5cf0ff !important; text-shadow: 0 0 6px rgba(0,229,255,0.55); }
+p, li, label, .stMarkdown { color: #c4d9e8 !important; }
+
+/* ボタン：ネオン枠 */
+.stButton > button {
+    background: rgba(20,8,30,0.7);
+    color: #5cf0ff;
+    border: 1px solid #5cf0ff;
+    border-radius: 4px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px;
+    transition: all 0.15s ease;
+    box-shadow: 0 0 8px rgba(0,229,255,0.18);
+}
+.stButton > button:hover {
+    background: #5cf0ff;
+    color: #0a0612;
+    box-shadow: 0 0 16px rgba(0,229,255,0.8);
+}
+
+/* 入力欄：ネオン枠 */
+.stTextInput input, .stNumberInput input {
+    background: #150a22 !important;
+    color: #ff5cf0 !important;
+    border: 1px solid #b03cc4 !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    letter-spacing: 1px;
+}
+.stTextInput input:focus, .stNumberInput input:focus {
+    box-shadow: 0 0 10px rgba(255,92,240,0.6) !important;
+}
+
+/* メトリクス（コイン・レベル）をアーケードのスコア表示風に */
+[data-testid="stMetricValue"] {
+    font-family: 'Orbitron', sans-serif !important;
+    color: #ffe14d !important;
+    text-shadow: 0 0 8px rgba(255,225,77,0.55);
+}
+[data-testid="stMetricLabel"] { color: #8fb4c9 !important; letter-spacing: 1px; }
+
+/* プログレスバーをネオン化 */
+.stProgress > div > div > div > div {
+    background-image: linear-gradient(90deg, #ff5cf0, #5cf0ff) !important;
+}
+
+/* サイドバー：研究端末っぽい無機質さ（やりすぎない） */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0c0718, #0a0612);
+    border-right: 1px solid rgba(255,46,205,0.25);
+}
+[data-testid="stSidebar"] .stMarkdown,
+[data-testid="stSidebar"] label { color: #9fb6c9 !important; }
+
+/* ホーム見出しの店名マーキー（流れる電飾看板風） */
+.arc-marquee {
+    overflow: hidden;
+    white-space: nowrap;
+    border: 1px solid rgba(0,229,255,0.4);
+    border-radius: 6px;
+    background: rgba(12,6,24,0.65);
+    box-shadow: inset 0 0 18px rgba(255,46,205,0.12);
+    margin: 0.2rem 0 0.8rem 0;
+    padding: 0.45rem 0;
+}
+.arc-marquee span {
+    display: inline-block;
+    padding-left: 100%;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.95rem;
+    color: #ffe14d;
+    text-shadow: 0 0 8px rgba(255,225,77,0.6), 0 0 14px rgba(255,46,205,0.4);
+    animation: arc-scroll 16s linear infinite;
+}
+@keyframes arc-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+/* 研究端末の極小フッター（隅に擬装データの気配だけ） */
+.arc-term {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: rgba(120,150,170,0.55);
+    letter-spacing: 1px;
+    border-top: 1px dashed rgba(0,229,255,0.18);
+    margin-top: 0.6rem;
+    padding-top: 0.35rem;
+}
+
+/* ごく薄い走査線オーバーレイ。操作は妨げない (pointer-events:none) */
+.stApp::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0.0) 0px,
+        rgba(0,0,0,0.0) 2px,
+        rgba(0,0,0,0.10) 3px,
+        rgba(0,0,0,0.0) 4px
+    );
+    mix-blend-mode: multiply;
+}
+</style>
+"""
+
+
+# ==========================================================================
 # 共通システム（コイン経済・プロフィール・実績）
 # ==========================================================================
 ACHIEVEMENTS = {
@@ -172,6 +307,15 @@ def reward_banner(amount):
 # ==========================================================================
 def page_home():
     st.title("🎮 ミニゲームアーケード")
+    # 店名マーキー（流れる電飾看板風）
+    st.markdown(
+        '<div class="arc-marquee"><span>'
+        '★ ＷＥＬＣＯＭＥ ＴＯ ＭＩＮＩ ＧＡＭＥ ＡＲＣＡＤＥ ★　'
+        '✦ ２４Ｈ ＯＰＥＮ ✦　INSERT COIN — PRESS START　'
+        '☕ マスターの店 ☕　★ ＰＬＡＹ ＆ ＷＩＮ ★'
+        '</span></div>',
+        unsafe_allow_html=True,
+    )
     st.write("ゲームで遊んでコインを稼ぎ、レベルと実績を集めよう！")
 
     name = st.text_input("プレイヤー名", value=st.session_state.player_name, max_chars=12)
@@ -206,6 +350,12 @@ def page_home():
 
     st.markdown("---")
     st.caption("👈 サイドバーからゲームや景品交換所を選んで遊ぼう！")
+    # 隅にほんの少しだけ研究端末の気配（擬装データ）
+    st.markdown(
+        '<div class="arc-term">CAB-UNIT // ECHO ARCHIVE :: '
+        'integrity OK &nbsp;|&nbsp; disguise=ON &nbsp;|&nbsp; ref#404</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -918,6 +1068,7 @@ def game_hangman():
 # メイン
 # ==========================================================================
 init_global_state()
+st.markdown(CSS, unsafe_allow_html=True)
 
 PAGES = {
     "🏠 ホーム": page_home,

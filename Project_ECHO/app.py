@@ -34,6 +34,125 @@ try:
 except Exception:
     _noxa = None
 
+# ==========================================================================
+# テーマ (無機質なAI研究所の管理端末 / コンテインメント・コンソール)
+# ==========================================================================
+# 冷たいシアン/青のモノトーン、モノスペース見出し、薄いグリッド線と走査線で
+# 「施設AI〈ECHO〉に監視された端末」の張り詰めた空気を演出する。
+# 既存の脱出フロー・session_state・関数には一切触れず、見た目のみを上書きする。
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&display=swap');
+
+.stApp {
+    background:
+        radial-gradient(circle at 50% -8%, rgba(0,180,220,0.10), transparent 50%),
+        radial-gradient(circle at 90% 110%, rgba(0,120,160,0.06), transparent 55%),
+        #05080c;
+    color: #b7d3da;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+/* グリッド線オーバーレイ（操作を妨げない） */
+.stApp::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+        linear-gradient(rgba(47,210,230,0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(47,210,230,0.045) 1px, transparent 1px);
+    background-size: 42px 42px;
+}
+
+/* 走査線（スキャンライン）オーバーレイ + 周辺減光（封じ込め感） */
+.stApp::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            rgba(0,0,0,0) 0px,
+            rgba(0,0,0,0) 2px,
+            rgba(0,20,28,0.16) 3px,
+            rgba(0,0,0,0) 4px
+        ),
+        radial-gradient(circle at 50% 45%, transparent 55%, rgba(0,0,0,0.55) 100%);
+}
+
+/* コンテンツは前面へ */
+.stApp .block-container { position: relative; z-index: 1; }
+
+h1, h2, h3 {
+    font-family: 'Orbitron', sans-serif !important;
+    color: #38e3da !important;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(56,227,218,0.45), 0 0 2px rgba(56,227,218,0.8);
+}
+h1 { border-bottom: 1px solid rgba(56,227,218,0.25); padding-bottom: 0.3rem; }
+
+p, li, label, .stMarkdown, .stCaption { color: #a9c7ce !important; }
+
+/* 端末コンソール風ボタン */
+.stButton > button, .stDownloadButton > button {
+    background: rgba(8,24,30,0.72);
+    color: #38e3da;
+    border: 1px solid #2fb6c2;
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.15s ease;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {
+    background: #38e3da;
+    color: #04141a;
+    border-color: #38e3da;
+    box-shadow: 0 0 14px rgba(56,227,218,0.7);
+}
+.stButton > button:active { transform: translateY(1px); }
+
+/* コマンドライン風入力欄 */
+.stTextInput input, .stNumberInput input, .stTextArea textarea {
+    background: #06151b !important;
+    color: #38e3da !important;
+    border: 1px solid #1f6b73 !important;
+    border-radius: 3px !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    letter-spacing: 2px;
+    caret-color: #38e3da;
+}
+.stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
+    border-color: #38e3da !important;
+    box-shadow: 0 0 10px rgba(56,227,218,0.4) !important;
+}
+
+/* 進捗バー・区切り線・展開パネルもテーマに合わせる */
+.stProgress > div > div > div { background: #38e3da !important; }
+hr { border-color: rgba(47,182,194,0.25) !important; }
+[data-testid="stExpander"] {
+    border: 1px solid rgba(47,182,194,0.3) !important;
+    background: rgba(6,21,27,0.5) !important;
+    border-radius: 4px;
+}
+
+/* サイドバー（施設ステータス端末風） */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #041014, #061b22) !important;
+    border-right: 1px solid rgba(47,182,194,0.3);
+}
+
+/* 入力プレースホルダ */
+::placeholder { color: rgba(56,227,218,0.35) !important; }
+</style>
+"""
+
+
 ROOM_ORDER = ["lobby", "lab", "monitor", "server", "central"]
 ROOM_LABEL = {
     "lobby": "🏛️ ロビー",
@@ -852,6 +971,7 @@ def page_ending():
 # メイン
 # ==========================================================================
 init_game()
+st.markdown(CSS, unsafe_allow_html=True)
 render_sidebar()
 
 if _noxa:

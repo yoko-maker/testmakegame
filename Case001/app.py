@@ -35,6 +35,134 @@ try:
 except Exception:
     _noxa = None
 
+
+# ==========================================================================
+# テーマ (探偵ノワール / 事件ファイル) ── 見た目のみ。ゲームロジックには非干渉。
+# ==========================================================================
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Shippori+Mincho:wght@500;700&display=swap');
+
+/* ── 背景: 暗いセピア＋深い赤、紙・捜査ファイルの質感 ── */
+.stApp {
+    background:
+        radial-gradient(circle at 50% -5%, rgba(120,20,20,0.18), transparent 45%),
+        repeating-linear-gradient(0deg, rgba(255,235,200,0.012) 0px, rgba(255,235,200,0.012) 1px, transparent 1px, transparent 3px),
+        linear-gradient(160deg, #1a1410 0%, #14100c 55%, #0d0a07 100%);
+    color: #d8c4a0;
+    font-family: 'Shippori Mincho', 'Special Elite', serif;
+}
+
+/* ── 画面端のヴィネット（暗がり）＋ざらつき: 操作を妨げない ── */
+.stApp::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    box-shadow: inset 0 0 220px 60px rgba(0,0,0,0.85),
+                inset 0 0 90px rgba(0,0,0,0.55);
+    background:
+        radial-gradient(circle at 18% 12%, rgba(0,0,0,0.0), rgba(0,0,0,0.45) 130%);
+}
+.stApp::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* メインコンテナを古い調書のような淡い紙面に */
+.block-container {
+    background:
+        linear-gradient(180deg, rgba(40,32,24,0.35), rgba(24,18,12,0.35));
+    border: 1px solid rgba(120,90,55,0.25);
+    border-radius: 2px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+}
+
+/* ── 見出し: タイプライター調・深紅のアクセント ── */
+h1, h2, h3 {
+    font-family: 'Special Elite', 'Shippori Mincho', serif !important;
+    color: #c9a268 !important;
+    letter-spacing: 2px;
+    text-shadow: 0 1px 0 #000, 0 0 14px rgba(120,20,20,0.4);
+}
+h1 {
+    border-bottom: 2px solid rgba(140,30,30,0.55);
+    padding-bottom: 0.3rem;
+}
+p, li, label, .stMarkdown, .stCaption, .stMarkdown p {
+    color: #cbb993 !important;
+    font-family: 'Shippori Mincho', serif !important;
+}
+a, a:visited { color: #c0504d !important; }
+hr { border-color: rgba(120,90,55,0.3) !important; }
+
+/* ── ボタン: 捜査ファイルのタブ風 ── */
+.stButton > button {
+    background: linear-gradient(180deg, #2a211a, #1c1610);
+    color: #d8c4a0;
+    border: 1px solid rgba(140,100,60,0.55);
+    border-radius: 3px 12px 0 0;
+    font-family: 'Special Elite', 'Shippori Mincho', serif;
+    letter-spacing: 1px;
+    box-shadow: inset 0 1px 0 rgba(255,220,170,0.08), 0 2px 5px rgba(0,0,0,0.5);
+    transition: all 0.15s ease;
+}
+.stButton > button:hover {
+    background: linear-gradient(180deg, #4a1f1c, #321311);
+    color: #f2e3c4;
+    border-color: #8c1e1e;
+    box-shadow: 0 0 14px rgba(140,30,30,0.55);
+}
+.stButton > button:active { transform: translateY(1px); }
+
+/* ── 入力欄: 調書（罫線の用紙）風 ── */
+.stTextInput input, .stTextArea textarea, .stNumberInput input {
+    background: rgba(20,16,11,0.85) !important;
+    color: #e4d2ac !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(140,100,60,0.6) !important;
+    border-radius: 0 !important;
+    font-family: 'Special Elite', monospace !important;
+    letter-spacing: 2px;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-bottom: 1px solid #c0504d !important;
+    box-shadow: 0 1px 8px rgba(140,30,30,0.35) !important;
+}
+.stSelectbox div[data-baseweb="select"] > div {
+    background: rgba(20,16,11,0.85) !important;
+    border: 1px solid rgba(140,100,60,0.5) !important;
+    border-radius: 2px !important;
+    color: #e4d2ac !important;
+}
+
+/* ラジオ・チェックボックスのラベルも質感を合わせる */
+.stRadio label, .stCheckbox label { color: #cbb993 !important; }
+
+/* タブ／エクスパンダ／メトリクスのアクセント */
+.stTabs [data-baseweb="tab"] { font-family: 'Special Elite', serif; }
+.streamlit-expanderHeader, details summary {
+    color: #c9a268 !important;
+    font-family: 'Special Elite', serif !important;
+}
+
+/* サイドバー: 古い書庫の棚のように */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #18120c, #100c08) !important;
+    border-right: 1px solid rgba(120,90,55,0.3);
+}
+
+/* code 表示（暗号・PIN等）をタイプライター質感に */
+code, pre, .stCode { font-family: 'Special Elite', monospace !important; }
+</style>
+"""
+
 # 正解
 SUSPECT_A = "佐倉（共同研究者）"
 MOTIVE_ANS = "研究成果の独占"
@@ -851,6 +979,7 @@ def page_ending():
 # メイン
 # ==========================================================================
 init_game()
+st.markdown(CSS, unsafe_allow_html=True)  # 探偵ノワール・テーマ（見た目のみ）
 render_sidebar()
 
 if _noxa:
