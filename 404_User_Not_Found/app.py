@@ -19,7 +19,7 @@ try:
     st.set_page_config(
         page_title="404_User_Not_Found",
         page_icon="🛑",
-        layout="centered",
+        layout="wide",
         initial_sidebar_state="expanded",
     )
 except Exception:

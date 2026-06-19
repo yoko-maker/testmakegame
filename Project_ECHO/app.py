@@ -25,7 +25,7 @@ import random
 import streamlit as st
 
 try:
-    st.set_page_config(page_title="Project ECHO", page_icon="🧬", layout="centered")
+    st.set_page_config(page_title="Project ECHO", page_icon="🧬", layout="wide")
 except Exception:
     pass  # ポータルに統合された場合は無視
 
@@ -87,8 +87,8 @@ CSS = """
         radial-gradient(circle at 50% 45%, transparent 58%, rgba(0,0,0,0.55) 100%);
 }
 
-/* コンテンツは前面へ */
-.stApp .block-container { position: relative; z-index: 1; }
+/* コンテンツは前面へ。フルスクリーンでも程よい最大幅で表示を大きく保つ */
+.stApp .block-container { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; }
 
 /* 見出し：無菌ラボの端末ラベル風。グローは控えめ＝ネオン感を出さない */
 h1, h2, h3 {
@@ -958,9 +958,12 @@ def room_central():
             st.rerun()
 
     st.metric("残り試行回数", st.session_state.rm_central_attempts)
-    code = st.text_input("認証コード（4桁）", max_chars=4, placeholder="____")
+    # フォーム化: コード入力欄でEnterを押すと「認証実行」と同じ判定が走る
+    with st.form("echo_auth_form", clear_on_submit=False):
+        code = st.text_input("認証コード（4桁）", max_chars=4, placeholder="____")
+        submitted = st.form_submit_button("🚨 認証実行", use_container_width=True)
 
-    if st.button("🚨 認証実行", use_container_width=True):
+    if submitted:
         entered = code.strip()
         if entered == st.session_state.echo_code:
             st.session_state.echo_ending = "true" if st.session_state.echo_secret else "normal"

@@ -25,7 +25,7 @@ import random
 import streamlit as st
 
 try:
-    st.set_page_config(page_title="Case001 消えた研究者", page_icon="🕵️", layout="centered")
+    st.set_page_config(page_title="Case001 消えた研究者", page_icon="🕵️", layout="wide")
 except Exception:
     pass  # ポータルに統合された場合は無視
 
@@ -130,11 +130,16 @@ hr { border-color: rgba(120,90,55,0.3) !important; }
     border-radius: 0 !important;
     font-family: 'Special Elite', monospace !important;
     letter-spacing: 2px;
+    caret-color: #f2e3c4 !important;   /* 入力カーソルを明るく＝位置が見える */
 }
 .stTextInput input:focus, .stTextArea textarea:focus {
-    border-bottom: 1px solid #c0504d !important;
+    border-bottom: 2px solid #c0504d !important;
     box-shadow: 0 1px 8px rgba(140,30,30,0.35) !important;
+    outline: 2px solid rgba(192,80,77,0.7) !important;
 }
+
+/* 単体起動でもフルスクリーンで表示が小さくならないよう、程よい最大幅にする */
+.block-container { max-width: 1100px !important; margin: 0 auto !important; }
 .stSelectbox div[data-baseweb="select"] > div {
     background: rgba(20,16,11,0.85) !important;
     border: 1px solid rgba(140,100,60,0.5) !important;
@@ -378,8 +383,13 @@ def page_board():
     if st.session_state.case_redherring and not st.session_state.get("case_saw_through"):
         st.write("📄 **黒田を名指しする『脅迫メモ』** が証拠として見つかっている。"
                  "この証拠をどう扱うか、あなたの判断は？")
+        # 「信じる」を選んだ場合のフィードバック（選んでも反応が無いと分かりづらいため明示）
+        if st.session_state.get("case_memo_trust"):
+            st.warning("✅ いまは脅迫メモを **そのまま信じている**（黒田が怪しいと見ている）。\n\n"
+                       "このまま推理に進んでもよいし、考え直して「疑ってみる」を選び直すこともできる。")
         cse1, cse2 = st.columns(2)
-        if cse1.button("✅ 脅迫メモをそのまま信じる", use_container_width=True):
+        if cse1.button("✅ 脅迫メモをそのまま信じる", use_container_width=True,
+                       type=("primary" if st.session_state.get("case_memo_trust") else "secondary")):
             st.session_state.case_memo_trust = True
             st.rerun()
         if cse2.button("🧐 脅迫メモを疑ってみる", use_container_width=True):
@@ -650,9 +660,12 @@ def view_pin():
             "**ブロー** = 数字は暗証番号に含まれるが位置が違う桁数。"
             "4ヒットで解除。")
 
-    ans = st.text_input("暗証番号を入力（4桁・数字は重複しない）", max_chars=4, placeholder="例: 0123")
+    # フォーム化: 入力欄でEnterを押すと「入力して照合」と同じ判定が走る
+    with st.form("pin_form", clear_on_submit=True):
+        ans = st.text_input("暗証番号を入力（4桁・数字は重複しない）", max_chars=4, placeholder="例: 0123")
+        submitted = st.form_submit_button("🔓 入力して照合")
 
-    if st.button("🔓 入力して照合"):
+    if submitted:
         g = ans.strip()
         if len(g) != 4 or not g.isdigit():
             st.error("❌ 4桁の数字を入力してください。")
@@ -710,11 +723,13 @@ def view_timeline():
     else:
         st.caption("（先に防犯カメラ解析を進めると、矛盾を裏づけやすい。）")
 
+    init_state("rm_timeline_pick", None)
     for idx, item in enumerate(TIMELINE):
         cols = st.columns([1, 4])
         cols[0].markdown(f"**{item['time']}**")
         cols[1].write(item["text"])
         if cols[1].button("この供述は矛盾している", key=f"tl_{idx}", use_container_width=True):
+            st.session_state.rm_timeline_pick = idx
             if not item["ok"]:
                 st.session_state.rm_timeline_found = item["why"]
                 gain_evidence("動機情報")
@@ -722,6 +737,9 @@ def view_timeline():
                 st.session_state.rm_timeline_miss += 1
                 st.session_state.rm_timeline_found = None
             st.rerun()
+        # 押した供述のすぐ下に判定を出す（結果が一番下にまとまって出ると分かりづらいため）
+        if st.session_state.rm_timeline_pick == idx and item["ok"]:
+            cols[1].error("❌ この供述に矛盾はない。他の証拠と突き合わせて考え直そう。")
 
     found = st.session_state.get("rm_timeline_found")
     if found:
@@ -729,7 +747,7 @@ def view_timeline():
         st.info("供述の嘘が割れたことで、特許を単独名義に書き換えた事実 ― **独占の動機** が浮かび上がった。"
                 "同じフォルダには黒田を名指しした『脅迫メモ』の画像も保存されていた。")
     elif st.session_state.rm_timeline_miss:
-        st.error(f"❌ その供述に矛盾はない。他の証拠と突き合わせて考え直そう。（誤り {st.session_state.rm_timeline_miss} 回）")
+        st.caption(f"（これまでの誤り: {st.session_state.rm_timeline_miss} 回）")
 
     if st.button("↩️ 捜査ボードに戻る"):
         goto("board")

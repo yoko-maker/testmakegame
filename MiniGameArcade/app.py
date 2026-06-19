@@ -19,7 +19,7 @@ import random
 import streamlit as st
 
 try:
-    st.set_page_config(page_title="ミニゲームアーケード", page_icon="🎮", layout="centered")
+    st.set_page_config(page_title="ミニゲームアーケード", page_icon="🎮", layout="wide")
 except Exception:
     pass  # ポータルに統合された場合は無視
 
@@ -83,10 +83,15 @@ p, li, label, .stMarkdown { color: #c4d9e8 !important; }
     border: 1px solid #b03cc4 !important;
     font-family: 'Share Tech Mono', monospace !important;
     letter-spacing: 1px;
+    caret-color: #ff5cf0 !important;   /* 入力カーソルを明るく＝位置が見える */
 }
 .stTextInput input:focus, .stNumberInput input:focus {
     box-shadow: 0 0 10px rgba(255,92,240,0.6) !important;
+    outline: 2px solid rgba(255,92,240,0.8) !important;
 }
+
+/* 単体起動でもフルスクリーンで表示が小さくならないよう、程よい最大幅にする */
+.block-container { max-width: 1180px !important; margin: 0 auto !important; }
 
 /* メトリクス（コイン・レベル）をアーケードのスコア表示風に */
 [data-testid="stMetricValue"] {
@@ -578,8 +583,12 @@ def game_secret():
             f"{' '.join('＿' for _ in seq)}</div>",
             unsafe_allow_html=True,
         )
-        answer = st.text_input("覚えた数列を続けて入力（例: 0314）", key="sm_answer", max_chars=len(seq))
-        if st.button("回答する", key="sm_submit", use_container_width=True):
+        # フォーム化: テキスト入力でEnterを押すと「回答する」と同じ判定が走る
+        with st.form("sm_form", clear_on_submit=True):
+            answer = st.text_input("覚えた数列を続けて入力（例: 0314）", key="sm_answer",
+                                   max_chars=len(seq))
+            submitted = st.form_submit_button("回答する", use_container_width=True)
+        if submitted:
             correct = "".join(str(n) for n in seq)
             if answer == correct:
                 level = st.session_state.sm_level
@@ -862,9 +871,20 @@ QUIZ = QUIZ_POOL
 
 
 def setup_quiz():
-    """問題プールから QUIZ_PER_GAME 問をランダム抽出して出題セットを作る。"""
+    """問題プールから QUIZ_PER_GAME 問をランダム抽出して出題セットを作る。
+
+    直前のプレイで出た問題は除外し、連続プレイで同じ問題が出にくいようにする。
+    （プール内は random.sample で必ず重複なし。さらに前回分も避ける。）
+    """
     n = min(QUIZ_PER_GAME, len(QUIZ_POOL))
-    st.session_state.qz_set = random.sample(QUIZ_POOL, n)
+    recent = st.session_state.get("qz_recent", set())
+    available = [q for q in QUIZ_POOL if q["q"] not in recent]
+    # 除外しすぎて足りない場合は全プールから抽選（出題数は確保する）
+    if len(available) < n:
+        available = QUIZ_POOL
+    chosen = random.sample(available, n)
+    st.session_state.qz_set = chosen
+    st.session_state.qz_recent = {q["q"] for q in chosen}
     st.session_state.qz_index = 0
     st.session_state.qz_score = 0
     st.session_state.qz_answered = False
@@ -947,7 +967,7 @@ def game_quiz():
 # --------------------------------------------------------------------------
 # ゲーム5: ハイ&ロー（コインを賭ける数字バトル）
 # --------------------------------------------------------------------------
-HL_MIN_BET = 5
+HL_MIN_BET = 1  # 1コインからベット可能（+10/+1/-1/-10で調整）
 HL_FACE = {1: "A", 11: "J", 12: "Q", 13: "K"}
 
 
@@ -975,8 +995,33 @@ def game_hilo():
             st.warning("コインが足りません。他のゲームで稼ごう！")
             return
         max_bet = max(HL_MIN_BET, min(st.session_state.coins, 200))
-        bet = st.slider("ベット額", HL_MIN_BET, max_bet, min(20, max_bet), step=5)
-        if st.button("🎴 勝負を始める", use_container_width=True):
+        init_state("hl_bet", min(20, max_bet))
+        # 所持コインの変動でベット額が範囲外になっていたら丸める
+        st.session_state.hl_bet = max(HL_MIN_BET, min(st.session_state.hl_bet, max_bet))
+        bet = st.session_state.hl_bet
+
+        st.markdown(
+            f"<div style='font-size:34px;text-align:center;'>💴 ベット額: "
+            f"<b style='color:#ffe14d;'>{bet}</b></div>",
+            unsafe_allow_html=True,
+        )
+        # 1単位の微調整も含め、+10 / +1 / -1 / -10 でベット額を決める
+        def adjust_bet(delta):
+            st.session_state.hl_bet = max(HL_MIN_BET, min(st.session_state.hl_bet + delta, max_bet))
+            st.rerun()
+
+        b1, b2, b3, b4 = st.columns(4)
+        if b1.button("－10", key="hl_m10", use_container_width=True, disabled=bet <= HL_MIN_BET):
+            adjust_bet(-10)
+        if b2.button("－1", key="hl_m1", use_container_width=True, disabled=bet <= HL_MIN_BET):
+            adjust_bet(-1)
+        if b3.button("＋1", key="hl_p1", use_container_width=True, disabled=bet >= max_bet):
+            adjust_bet(1)
+        if b4.button("＋10", key="hl_p10", use_container_width=True, disabled=bet >= max_bet):
+            adjust_bet(10)
+        st.caption(f"ベット可能範囲: {HL_MIN_BET} 〜 {max_bet} コイン（1コイン単位で調整可）")
+
+        if st.button(f"🎴 {bet}コインで勝負を始める", use_container_width=True, type="primary"):
             add_coins(-bet)
             st.session_state.hl_card = random.randint(1, 13)
             st.session_state.hl_pot = bet
@@ -1049,8 +1094,8 @@ HANGMAN_WORDS_EN = [
     ("GUITAR", "弦楽器"),
     ("RAINBOW", "雨上がりの空にかかる"),
     ("DIAMOND", "硬い宝石"),
-    ("ECHO", "マスターが逃げてきた“計画”の名"),
-    ("NOXA", "とある巨大研究機構の名"),
+    ("FLOWER", "花"),
+    ("ANIMAL", "動物"),
 ]
 HANGMAN_WORDS_JA = [
     ("すいか", "夏に食べる果物"),
@@ -1064,7 +1109,7 @@ HANGMAN_WORDS_JA = [
     ("みかん", "冬に食べる果物"),
     ("ゆき", "冬に降る白いもの"),
     ("くも", "空に浮かぶ白いもの"),
-    ("こだま", "山びこ。“ECHO”の日本語"),
+    ("うみ", "広い水の地形"),
 ]
 # 五十音キーボードの配列（空文字は空白セル）
 KANA_ROWS = [
@@ -1138,6 +1183,30 @@ def game_hangman():
         if letter not in word:
             st.session_state.hm_miss += 1
         st.rerun()
+
+    # --- キーボードからの直接入力（1文字 + Enterで確定）。画面のボタンでも入力できる ---
+    if st.session_state.hm_mode == "日本語(ひらがな)":
+        valid_chars = {k for row in KANA_ROWS for k in row if k}
+        ph = "ひらがな1文字"
+    else:
+        valid_chars = {chr(c) for c in range(ord("A"), ord("Z") + 1)}
+        ph = "アルファベット1文字"
+    with st.form("hm_type_form", clear_on_submit=True):
+        typed = st.text_input("⌨️ キーボードで入力（Enterで確定）", max_chars=1,
+                              key="hm_typed", placeholder=ph, disabled=disabled_all)
+        typed_submit = st.form_submit_button("入力する", use_container_width=True,
+                                             disabled=disabled_all)
+    if typed_submit and not disabled_all:
+        ch = typed.strip()
+        if st.session_state.hm_mode == "English":
+            ch = ch.upper()
+        if ch in guessed:
+            st.warning(f"「{ch}」はすでに使った文字です。")
+        elif ch in valid_chars:
+            on_guess(ch)
+        elif ch:
+            kinds = "A〜Z" if st.session_state.hm_mode == "English" else "ひらがな"
+            st.warning(f"有効な文字ではありません。{kinds}を1文字入力してください。")
 
     if st.session_state.hm_mode == "日本語(ひらがな)":
         # 五十音キーボード（5列）

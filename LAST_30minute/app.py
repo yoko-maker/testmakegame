@@ -18,7 +18,7 @@ import time
 import streamlit as st
 
 try:
-    st.set_page_config(page_title="LAST 30 MINUTES", page_icon="☄️", layout="centered")
+    st.set_page_config(page_title="LAST 30 MINUTES", page_icon="☄️", layout="wide")
 except Exception:
     pass  # ポータルに統合された場合は無視
 
@@ -136,7 +136,11 @@ p, li, label, .stMarkdown, .stCaption, .stCaption p {
 .stTextInput input:focus, .stNumberInput input:focus {
     border-color: #ff3b30 !important;
     box-shadow: 0 0 10px rgba(255,59,48,0.4) !important;
+    outline: 2px solid rgba(255,59,48,0.6) !important;
 }
+
+/* 単体起動でもフルスクリーンで表示が小さくならないよう、程よい最大幅にする */
+.block-container { max-width: 1100px !important; margin: 0 auto !important; }
 
 /* ── 残り時間モニタ（HUD のタイマーを囲む枠） ── */
 [data-testid="stProgress"] > div > div > div {
@@ -497,8 +501,11 @@ def view_type():
     word = st.session_state.mg_type[idx]
     st.progress(idx / 3, text=f"コード {idx + 1} / 3")
     st.markdown(f"<div style='font-size:40px; text-align:center; letter-spacing:6px; font-family:monospace;'>{word}</div>", unsafe_allow_html=True)
-    typed = st.text_input("上のコードを正確に入力（大文字）", key=f"type_in_{idx}")
-    if st.button("📨 送信", use_container_width=True):
+    # フォーム化: 入力欄でEnterを押すと「送信」と同じ判定が走る
+    with st.form(f"type_form_{idx}", clear_on_submit=True):
+        typed = st.text_input("上のコードを正確に入力（大文字）", key=f"type_in_{idx}")
+        submitted = st.form_submit_button("📨 送信", use_container_width=True)
+    if submitted:
         if typed.strip().upper() == word:
             st.session_state.mg_type_idx += 1
             if st.session_state.mg_type_idx >= 3:

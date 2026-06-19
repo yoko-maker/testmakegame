@@ -50,8 +50,10 @@ def caesar_game() -> bool:
     st.write("プレビュー:")
     st.code(ciphers.caesar(cipher, -shift))
 
-    guess = st.text_input("復号文を入力", key="caesar_in")
-    if st.button("解読", key="caesar_btn"):
+    with st.form("caesar_form", clear_on_submit=False):
+        guess = st.text_input("復号文を入力", key="caesar_in")
+        decode_clicked = st.form_submit_button("解読")
+    if decode_clicked:
         if ciphers.normalize(guess) == answer:
             _mark_solved(name)
             state.add_decoded("FIND AKIRA")
@@ -122,8 +124,10 @@ def image_search_game() -> bool:
         st.success("隠し文字を発見: NULL")
         return True
 
-    guess = st.text_input("隠し文字を入力", key="img_in")
-    if st.button("照合", key="img_btn"):
+    with st.form("img_form", clear_on_submit=False):
+        guess = st.text_input("隠し文字を入力", key="img_in")
+        match_clicked = st.form_submit_button("照合")
+    if match_clicked:
         if ciphers.normalize(guess) == secret:
             _mark_solved(name)
             state.add_clue("画像から組織名らしき文字列: NULL")
@@ -164,8 +168,10 @@ def morse_game() -> bool:
         st.success("解読完了: SOS NULL")
         return True
 
-    guess = st.text_input("解読したメッセージを入力", key="morse_in")
-    if st.button("解読", key="morse_btn"):
+    with st.form("morse_form", clear_on_submit=False):
+        guess = st.text_input("解読したメッセージを入力", key="morse_in")
+        decode_clicked = st.form_submit_button("解読")
+    if decode_clicked:
         if ciphers.normalize(guess) == ciphers.normalize(message):
             _mark_solved(name)
             state.add_decoded("SOS NULL")
@@ -201,8 +207,10 @@ def vigenere_game() -> bool:
     if key_in:
         st.write("復号プレビュー:")
         st.code(ciphers.vigenere_decrypt(cipher, key_in or "A"))
-    guess = st.text_input("復号文を入力", key="vig_in")
-    if st.button("解読", key="vig_btn"):
+    with st.form("vig_form", clear_on_submit=False):
+        guess = st.text_input("復号文を入力", key="vig_in")
+        decode_clicked = st.form_submit_button("解読")
+    if decode_clicked:
         if ciphers.normalize(guess) == ciphers.normalize(plain):
             _mark_solved(name)
             state.add_decoded("THEY ARE WATCHING YOU")

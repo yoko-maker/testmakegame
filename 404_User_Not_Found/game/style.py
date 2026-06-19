@@ -118,7 +118,14 @@ code, pre {
     color: var(--term-green) !important;
     border: 1px solid var(--term-dim) !important;
     font-family: 'Share Tech Mono', monospace !important;
+    caret-color: var(--term-green) !important;   /* 入力カーソルを明るく＝位置が見える */
 }
+.stTextInput input:focus, .stTextArea textarea:focus {
+    outline: 2px solid var(--term-green) !important;
+}
+
+/* 単体起動でもフルスクリーンで表示が小さくならないよう、程よい最大幅にする */
+.block-container { max-width: 1100px !important; margin: 0 auto !important; }
 
 .term-box {
     border: 1px solid var(--term-dim);

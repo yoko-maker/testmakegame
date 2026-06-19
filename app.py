@@ -23,7 +23,7 @@ import wave
 import numpy as np
 import streamlit as st
 
-st.set_page_config(page_title="NOXA Game Portal", page_icon="🕹️", layout="centered")
+st.set_page_config(page_title="NOXA Game Portal", page_icon="🕹️", layout="wide")
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 # 404ゲームはローカルパッケージ(game)を相対importで使うため、解決できるようにパスを通す
@@ -98,7 +98,51 @@ def _is_mobile():
 # スマホでも1行に収まり、タップしやすいことを重視。
 _RESPONSIVE_CSS = """
 <style>
+/* レイアウトは wide だが、広すぎると読みづらいので中央に程よい最大幅を設ける。
+   centered の既定(約730px)より広く、フルスクリーンでも表示が大きくなる。 */
+.block-container {
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+  padding-left: 2rem; padding-right: 2rem;
+}
+/* 全体の基準文字サイズを少し大きめにして視認性を上げる */
+html, body, .stApp { font-size: 17px; }
+
+/* テキスト入力のカーソル(キャレット)を明るくし、入力位置を分かりやすく。
+   フォーカス中の枠も強調して「今どこに入力しているか」を明確にする。 */
+.stTextInput input, .stNumberInput input, .stTextArea textarea {
+  caret-color: #00e5ff !important;
+}
+.stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
+  outline: 2px solid rgba(0,229,255,0.75) !important;
+  outline-offset: 1px;
+}
+
+/* ポータルの作品見出しをクリック可能なボタンとして“見出し風”に見せる。
+   key が title_ で始まるボタンを、枠なし・大きめ文字の見出しに整形する。 */
+[class*="st-key-title_"] button {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0.1rem 0 !important;
+  min-height: 0 !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  cursor: pointer;
+}
+[class*="st-key-title_"] button p {
+  font-size: 1.45rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 1px;
+  margin: 0 !important;
+}
+[class*="st-key-title_"] button:hover p {
+  text-decoration: underline;
+  filter: brightness(1.25);
+}
+
 @media (max-width: 680px) {
+  .block-container { max-width: 100% !important; padding-left: 0.6rem; padding-right: 0.6rem; }
   /* 左右は詰めて表示幅を稼ぐが、上は十分にあけて
      Streamlitの上部ツールバーにコンテンツが潜り込む（見切れ）のを防ぐ */
   .block-container { padding: 3rem 0.6rem 2.5rem !important; }
@@ -1156,14 +1200,18 @@ def home():
                 body = c2
             if is_unlocked:
                 badge = " ✅クリア済" if cleared else ""
+                # 見出し自体をボタン化し、文字クリックでも入れるようにする（#見出しクリック）
                 if mobile:
-                    body.subheader(f"{g['icon']} {g['title']}{badge}")
+                    title_label = f"{g['icon']} {g['title']}{badge}"
                 else:
                     c1.markdown(f"<div style='font-size:52px;text-align:center;'>{g['icon']}</div>",
                                 unsafe_allow_html=True)
-                    body.subheader(f"{g['title']}{badge}")
-                if body.button(f"▶ {g['title']} を遊ぶ", key=f"play_{g['key']}",
-                               use_container_width=True):
+                    title_label = f"{g['title']}{badge}"
+                enter_by_title = body.button(title_label, key=f"title_{g['key']}",
+                                             use_container_width=True)
+                enter_by_button = body.button(f"▶ {g['title']} を遊ぶ", key=f"play_{g['key']}",
+                                              use_container_width=True)
+                if enter_by_title or enter_by_button:
                     noxa.record_play(g["key"])
                     _sector_transition(g["title"])   # C. 遷移演出
                     st.switch_page(g["path"])
@@ -1189,12 +1237,16 @@ def home():
             body = c2
         if noxa.project000_unlocked():
             if mobile:
-                body.subheader("🌀 Project 000")
+                p000_title = "🌀 Project 000"
             else:
                 c1.markdown("<div style='font-size:52px;text-align:center;'>🌀</div>",
                             unsafe_allow_html=True)
-                body.subheader("Project 000")
-            if body.button("▶ Project 000 を起動", key="play_p000", use_container_width=True):
+                p000_title = "Project 000"
+            enter_p000_title = body.button(p000_title, key="title_p000",
+                                           use_container_width=True)
+            enter_p000_btn = body.button("▶ Project 000 を起動", key="play_p000",
+                                         use_container_width=True)
+            if enter_p000_title or enter_p000_btn:
                 _sector_transition("PROJECT 000")   # C. 遷移演出
                 st.switch_page(p000_page)
         else:

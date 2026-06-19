@@ -21,7 +21,7 @@ import time
 import streamlit as st
 
 try:
-    st.set_page_config(page_title="PAIR LOCK", page_icon="🔒", layout="centered")
+    st.set_page_config(page_title="PAIR LOCK", page_icon="🔒", layout="wide")
 except Exception:
     pass  # ポータルに統合された場合は無視
 
@@ -73,7 +73,14 @@ p, li, label, .stMarkdown { color: #c2dde3 !important; }
     border: 1px solid #1f6b6b !important;
     font-family: 'Share Tech Mono', monospace !important;
     letter-spacing: 2px;
+    caret-color: #2fe6d6 !important;   /* 入力カーソルを明るく＝位置が見える */
 }
+.stTextInput input:focus {
+    outline: 2px solid rgba(47,230,214,0.7) !important;
+}
+
+/* 単体起動でもフルスクリーンで表示が小さくならないよう、程よい最大幅にする */
+.block-container { max-width: 1100px !important; margin: 0 auto !important; }
 
 .pl-panel {
     border: 1px solid #1f6b6b;
@@ -563,9 +570,11 @@ def answer_block(code: str, role: str, stage: int, expected: str, label: str,
         waiting_view(code, role, stage)
         return
     key = f"in_{stage}_{role}"
-    guess = st.text_input(label, key=key, placeholder=placeholder)
-    if st.button("▶ 送信", key=f"sub_{stage}_{role}", type="primary",
-                 use_container_width=True):
+    # フォーム化: 入力欄でEnterを押すと「送信」と同じ判定が走る
+    with st.form(f"ans_form_{stage}_{role}", clear_on_submit=False):
+        guess = st.text_input(label, key=key, placeholder=placeholder)
+        submitted = st.form_submit_button("▶ 送信", type="primary", use_container_width=True)
+    if submitted:
         ok = norm(guess) == norm(expected)
         submit_answer(code, role, stage, ok)
         if ok:
