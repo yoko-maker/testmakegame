@@ -1257,7 +1257,7 @@ st.sidebar.title("🎮 ミニゲームアーケード")
 st.sidebar.metric("💴 コイン", st.session_state.coins)
 st.sidebar.metric("⭐ レベル", player_level())
 st.sidebar.markdown("---")
-choice = st.sidebar.radio("メニュー", list(PAGES.keys()))
+choice = st.sidebar.radio("メニュー", list(PAGES.keys()), key="arc_menu")
 st.sidebar.markdown("---")
 st.sidebar.caption(f"👤 {st.session_state.player_name}")
 

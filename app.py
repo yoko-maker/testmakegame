@@ -1369,11 +1369,29 @@ def scroll_to_top():
     )
 
 
-# ページが切り替わったとき（フッター等から別ページへ遷移したとき）は最上部へ。
-# 同一ページ内の再実行ではスクロール位置を維持する。
-if st.session_state.get("_prev_page") != _target:
-    st.session_state["_prev_page"] = _target
-    scroll_to_top()
+# 「いまどの画面を見ているか」を表す署名。ページURL(_target)に加えて、
+# 各ゲームが内部で画面を切り替えるのに使うキーを合成する。これが前回と
+# 変われば（＝別ページや、ゲーム内で謎を解いて次の画面へ進んだとき）
+# 最上部へスクロールする。署名の判定は nav.run() の後（各ゲームが
+# その回の画面状態を確定させた後）に行う。→ ファイル末尾参照。
+#
+# 各ゲームの「現在の画面」を決めるsession_stateキー。
+# 新しい画面遷移を追加したらここに足すこと。
+_SCREEN_KEYS = (
+    "stage",          # 404 User Not Found
+    "echo_room", "echo_ending",            # Project ECHO
+    "lz_view", "lz_started", "lz_ending",  # LAST 30 MINUTES
+    "case_view",      # 消えた研究者(Case001)
+    "pl_role", "pl_code", "pl_solo", "pl_seen_stage",  # PAIR LOCK
+    "arc_menu",       # ミニゲームアーケード(サイドバーのメニュー選択)
+)
+
+
+def current_screen_sig():
+    """現在表示中の画面を一意に表す署名を返す。"""
+    return (_target,) + tuple(
+        repr(st.session_state.get(k)) for k in _SCREEN_KEYS
+    )
 
 # D. 強制切断イベント（PAIR LOCKクリア後・ホームで一度だけ）。
 # FX/フッターより前で全画面を占有し、再接続するまで先へ進ませない。
@@ -1431,3 +1449,11 @@ if _target in noxa.GAME_KEYS:
         st.divider()
 
 nav.run()
+
+# 画面が変わったら最上部へスクロール（別ページへの遷移も、ゲーム内で謎を解いて
+# 次の画面へ進んだ場合も拾う）。同一画面内での再実行ではスクロール位置を維持。
+# nav.run() 後に判定することで、各ゲームがこの回に確定させた画面状態を反映できる。
+_sig = current_screen_sig()
+if st.session_state.get("_prev_screen_sig") != _sig:
+    st.session_state["_prev_screen_sig"] = _sig
+    scroll_to_top()
