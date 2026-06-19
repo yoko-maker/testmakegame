@@ -22,6 +22,7 @@ import wave
 
 import numpy as np
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="NOXA Game Portal", page_icon="🕹️", layout="wide")
 
@@ -1337,6 +1338,42 @@ if not st.session_state.get("obs_logged"):
 
 _target = getattr(nav, "url_path", "")
 _is_home = _target not in noxa.GAME_KEYS and _target not in ("void", "project000", "chat404")
+
+
+def scroll_to_top():
+    """ページ最上部へスクロールする。Streamlit本体はiframeの親側にあるため、
+    親ドキュメントのスクロール要素（バージョン差を吸収して複数候補）を0へ戻す。
+    レイアウト確定前の取りこぼしを防ぐため数フレーム繰り返す。"""
+    components.html(
+        """
+        <script>
+        const doc = window.parent.document;
+        const targets = [
+            doc.querySelector('[data-testid="stMain"]'),
+            doc.querySelector('section.main'),
+            doc.querySelector('.main'),
+            doc.scrollingElement,
+            doc.documentElement,
+            doc.body,
+        ].filter(Boolean);
+        const toTop = () => targets.forEach(el => {
+            try { el.scrollTo({top: 0, left: 0, behavior: 'instant'}); }
+            catch (e) { el.scrollTop = 0; }
+        });
+        toTop();
+        let n = 0;
+        const id = setInterval(() => { toTop(); if (++n > 10) clearInterval(id); }, 30);
+        </script>
+        """,
+        height=0,
+    )
+
+
+# ページが切り替わったとき（フッター等から別ページへ遷移したとき）は最上部へ。
+# 同一ページ内の再実行ではスクロール位置を維持する。
+if st.session_state.get("_prev_page") != _target:
+    st.session_state["_prev_page"] = _target
+    scroll_to_top()
 
 # D. 強制切断イベント（PAIR LOCKクリア後・ホームで一度だけ）。
 # FX/フッターより前で全画面を占有し、再接続するまで先へ進ませない。
