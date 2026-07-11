@@ -50,6 +50,17 @@ UNLOCK_CHAIN = {
 }
 INITIAL_UNLOCKED = ["arcade", "case001"]
 
+# --------------------------------------------------------------------------
+# 管理者設定
+# --------------------------------------------------------------------------
+# ADMIN_MODE を True にすると、ポータル下部の「⚙ プレイヤーデータ」内に
+# 管理者パネルが常時表示され、ワンクリックで全作品クリア状態にできる。
+# （デモ・審査・動作確認用。通常配布時は False のままにしておく）
+ADMIN_MODE = False
+# コードを入れて解放する方式でも有効化できる（コード編集不要）。
+# 空文字にするとコードによる解放を無効化する。
+ADMIN_CODE = "noxa-admin"
+
 # 共通調査ボード: NOXAの真相に関わる調査対象
 BOARD_ITEMS = ["天城 真", "被験者404", "霧島 玲", "ECHO", "NOXA", "第7研究棟", "赤い女"]
 # 各作品クリアで明らかになる調査項目
@@ -571,6 +582,67 @@ def report_clear(key):
             changed = True
     if changed:
         save()
+
+
+def unlock_all(complete=False):
+    """【管理者用】全作品をクリア済みにし、調査ボードも全開示する。
+
+    complete=True のときは Project 000 も完了扱い（ホーム演出を 'done' に）にし、
+    「全クリアした状態」で最初から遊べるようにする。冪等で、保存も行う。
+    """
+    try:
+        s = state()
+    except Exception:
+        return
+    for k in GAME_KEYS:
+        s["cleared"][k] = True
+    for item in BOARD_ITEMS:
+        s["board"][item] = True
+    s["seen_intro"] = True
+    if complete:
+        s["choices"]["seen_000"] = True
+    save()
+
+
+def lock_all():
+    """【管理者用】クリア状況・調査ボードを未クリア状態へ戻す（進行リセット）。
+
+    プレイヤー名や観察ログは保持したまま、クリア/ボード/横断フラグだけ初期化する。
+    """
+    try:
+        s = state()
+    except Exception:
+        return
+    for k in GAME_KEYS:
+        s["cleared"][k] = False
+    for item in BOARD_ITEMS:
+        s["board"][item] = False
+    s["choices"] = {}
+    s["seen_unlocks"] = []
+    save()
+
+
+def admin_enabled():
+    """管理者パネルを表示してよいか（設定フラグ or セッションで解放済み）。"""
+    if ADMIN_MODE:
+        return True
+    try:
+        return bool(st.session_state.get("_noxa_admin"))
+    except Exception:
+        return False
+
+
+def try_admin_unlock(code):
+    """入力コードが管理者コードと一致すればセッションを管理者解放する。"""
+    if not ADMIN_CODE:
+        return False
+    if (code or "").strip() == ADMIN_CODE:
+        try:
+            st.session_state["_noxa_admin"] = True
+        except Exception:
+            pass
+        return True
+    return False
 
 
 def set_choice(key, value):

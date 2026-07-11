@@ -1297,6 +1297,36 @@ def home():
             noxa.delete_save()
             noxa.reset_session()
             st.rerun()
+
+        # ---- 管理者パネル（全クリア状態で開始できる設定） ----
+        st.markdown("---")
+        if not noxa.admin_enabled():
+            with st.form("noxa_admin_gate", clear_on_submit=True):
+                code = st.text_input("🔑 管理者コード", type="password",
+                                     placeholder="管理者のみ")
+                if st.form_submit_button("解錠", use_container_width=True):
+                    if noxa.try_admin_unlock(code):
+                        st.success("管理者モードを解錠しました。")
+                        st.rerun()
+                    else:
+                        st.error("コードが違います。")
+        else:
+            st.caption("🛠 **管理者パネル** ── 進行状態を任意に書き換えられます。")
+            acols = st.columns(2)
+            if acols[0].button("✅ 全作品クリア状態にする", use_container_width=True):
+                noxa.unlock_all(complete=False)
+                st.success("全作品をクリア済みにしました。")
+                st.rerun()
+            if acols[1].button("🌀 Project 000まで完了にする", use_container_width=True):
+                noxa.unlock_all(complete=True)
+                st.success("Project 000 まで完了扱いにしました。")
+                st.rerun()
+            if st.button("↩ クリア状況をリセット（未クリアに戻す）",
+                         use_container_width=True):
+                noxa.lock_all()
+                st.success("クリア状況をリセットしました。")
+                st.rerun()
+
     st.caption("すべて Python + Streamlit 製。各作品は個別フォルダでも単体起動できます。")
 
 
