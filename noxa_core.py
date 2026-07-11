@@ -599,8 +599,42 @@ def unlock_all(complete=False):
     for item in BOARD_ITEMS:
         s["board"][item] = True
     s["seen_intro"] = True
+    s["choices"]["admin_cleared"] = True  # 管理者による全クリア（靄演出を抑止）
     if complete:
         s["choices"]["seen_000"] = True
+    save()
+
+
+def apply_clears(keys, complete=False, suppress_haze=True):
+    """【管理者用】指定した作品キーだけをクリア済みにする（それ以外は未クリア）。
+
+    - keys: クリア済みにする作品キーの集合／リスト
+    - complete: True で Project 000 も完了扱い（keys が全作品のときのみ意味を持つ）
+    - suppress_haze: True でホームのUI侵食（靄）を抑止するフラグを立てる
+
+    クリアした作品に応じて調査ボードも開示し直す。冪等で、保存も行う。
+    """
+    try:
+        s = state()
+    except Exception:
+        return
+    keyset = {k for k in keys if k in GAME_KEYS}
+    for k in GAME_KEYS:
+        s["cleared"][k] = k in keyset
+    # 調査ボードはクリア済み作品から作り直す
+    for item in BOARD_ITEMS:
+        s["board"][item] = False
+    for k in keyset:
+        for item in BOARD_REVEAL.get(k, []):
+            if item in s["board"]:
+                s["board"][item] = True
+    if keyset:
+        s["seen_intro"] = True
+    s["choices"]["seen_000"] = bool(complete and keyset == set(GAME_KEYS))
+    if suppress_haze:
+        s["choices"]["admin_cleared"] = True
+    else:
+        s["choices"].pop("admin_cleared", None)
     save()
 
 
@@ -617,9 +651,17 @@ def lock_all():
         s["cleared"][k] = False
     for item in BOARD_ITEMS:
         s["board"][item] = False
-    s["choices"] = {}
+    s["choices"] = {}  # admin_cleared フラグも解除される
     s["seen_unlocks"] = []
     save()
+
+
+def admin_cleared():
+    """管理者パネルから全クリアにした状態か（UI侵食の靄を抑止する判定用）。"""
+    try:
+        return bool(state()["choices"].get("admin_cleared"))
+    except Exception:
+        return False
 
 
 def admin_enabled():
