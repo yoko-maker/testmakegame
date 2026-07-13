@@ -42,3 +42,20 @@ def vigenere_decrypt(text: str, key: str) -> str:
 def normalize(text: str) -> str:
     """回答比較用: 英数字のみ大文字化。"""
     return "".join(c for c in text.upper() if c.isalnum())
+
+
+def extract_key_letters(name: str) -> str:
+    """名前からローマ字(A〜Z)だけを抽出し大文字化する。
+
+    NOXA登録名をヴィジュネル鍵へ変換するための下処理。
+    スペース・記号・日本語表記などは全て削ぎ落とされる。"""
+    return "".join(ch for ch in name.upper() if "A" <= ch <= "Z")
+
+
+def key_from_name(name: str, fallback: str = "NULL") -> str:
+    """プレイヤーの登録名からヴィジュネル鍵を生成する。
+
+    抽出したローマ字が2文字未満(日本語名など、ローマ字表記を持たない
+    登録名)の場合は fallback を返し、従来通りの鍵で成立させる。"""
+    letters = extract_key_letters(name)
+    return letters if len(letters) >= 2 else fallback

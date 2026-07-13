@@ -123,6 +123,38 @@ p, li, label, .stMarkdown { color: #c2dde3 !important; }
     font-size: 0.98rem; line-height: 1.5;
 }
 .pl-radio div { border-bottom: 1px dotted rgba(47,230,214,0.12); padding-bottom:0.3rem; }
+
+/* 要素A: 前任ペアのゴーストログ — 既存の無線(青緑)とは違う、色褪せたノイズ調 */
+.pl-ghost {
+    border: 1px dashed #7a7a7a;
+    background:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.025) 0 2px, transparent 2px 6px),
+        rgba(14,14,14,0.55);
+    color: #b6b6b6;
+    font-size: 0.95rem; line-height: 1.55;
+}
+.pl-ghost-head {
+    color: #ff5c5c; font-size: 0.82rem; letter-spacing: 2px;
+    margin-bottom: 0.4rem; opacity: 0.85;
+}
+
+/* 要素C: 相方にしか見えない赤い女 — ティール管制室に赤を一瞬だけ混ぜ、フェードで消す */
+.pl-redwoman {
+    border: 1px solid #ff3b3b;
+    background: rgba(40,8,8,0.35);
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    margin: 0.5rem 0;
+    color: #ff8f8f;
+    font-size: 0.95rem;
+    animation: redglimpse 2.6s ease-out forwards;
+}
+@keyframes redglimpse {
+    0%   { opacity: 0; }
+    12%  { opacity: 1; }
+    75%  { opacity: 0.85; }
+    100% { opacity: 0.18; }
+}
 </style>
 """
 
@@ -177,7 +209,10 @@ RADIO_LOGS = {
         ("P2", "断片ログを繋いだか? ……もし二人分の半分が一つの単語になるなら、"
                "それは本部が消したがってた裏ファイルのコードだ。"),
         ("P1", "なあ。この施設、本当に俺たちを『出す』気があるのか?"),
-        ("P2", "わからん。だが今は、お前を外に出すことだけ考える。最後の扉だ。")],
+        ("P2", "わからん。だが今は、お前を外に出すことだけ考える。最後の扉だ。"),
+        # 要素B(通信改ざん)の回収: NOXAが通信経路に介入していたことを短く示す。
+        ("sys", "［通信診断］ 直前区間、送受信データに改ざんの痕跡を検出 — "
+               "中継経路: NOXA関連区画。……鵜呑みにするな、ということらしい。")],
 }
 
 # Final認証の物語的意味: 生成されるコードは「失踪した最終施錠者の名前(の符牒)」。
@@ -195,6 +230,30 @@ def radio_label(spk: str, role: str) -> str:
     return f"<span class='{cls}'>{spk}・{who}</span>"
 
 
+# --------------------------------------------------------------------------
+# 要素A: 前任ペアのゴーストログ
+#   無線会話とは別に、確率で「以前この部屋を試みた二人」の交信断片が混じる。
+#   ステージが進むほど不穏になり、Stage4後(Final直前)の断片だけは
+#   Finalで回収される「失踪した最終施錠者の名前」に一部だけ繋がる(全部は明かさない)。
+# --------------------------------------------------------------------------
+def ghost_log_lines(after_stage: int, pz: dict) -> list:
+    if after_stage == 1:
+        return ["こちら第7棟、認証が通らない。……誰か、聞こえて▓いないか。",
+                 "▓▓▓これより先は、記録に残っていない区画だ。"]
+    if after_stage == 2:
+        return ["区画404って何だ? 図面のどこにも▓載っていないぞ。",
+                 "本部、応答してくれ。……本部? おい。"]
+    if after_stage == 3:
+        return ["もう一人の声が聞こえる。俺たち以外に▓、誰かいる。",
+                 "さっきから、同じ場所を同じ言葉で回っている気がする。"]
+    if after_stage == 4:
+        name = pz.get("lock_name", "")
+        initial = name[0] if name else "?"
+        return [f"『{initial}▓』……この文字、最後の扉の名簿で見た気がする。",
+                 "頼む、誰か思い出してくれ。俺たちの前に、ここへ来た誰かがいた。"]
+    return []
+
+
 def _new_room(seed: int) -> dict:
     return {
         "seed": seed,
@@ -208,6 +267,14 @@ def _new_room(seed: int) -> dict:
         "stamp": {"p1": None, "p2": None},  # (text, timestamp)
         "hidden_log": False,
         "ending": None,
+        # 要素A: 前任ペアのゴーストログ。ステージ(1〜4)ごとに None=未判定/True/False。
+        # ルーム状態に確定結果を持たせることで、両プレイヤーに同じ断片を同期表示する。
+        "ghost_log_hit": {s: None for s in range(1, LAST_STAGE)},
+        # 要素B: 通信改ざん(Stage4限定)。理不尽な安定度低下を避けるため初回誤答を1回だけ免除。
+        "s4_tamper_grace_used": False,
+        # 要素C: 相方にしか見えない赤い女。中盤(3or4)で一度だけP2に表示。seedで決定的に選ぶ。
+        "red_woman_stage": random.Random(seed).randint(3, 4),
+        "red_woman_shown": False,
     }
 
 
@@ -251,20 +318,46 @@ def room_snapshot(code: str):
         return copy.deepcopy(room) if room else None
 
 
-def submit_answer(code: str, role: str, stage: int, correct: bool):
+def _roll_ghost_log(room: dict, stage: int) -> None:
+    """ステージ突破の瞬間に一度だけゴーストログの発生を判定する(約30%)。
+
+    ここで確定させた結果をルーム状態へ保存するため、後から誰が見ても
+    (P1/P2どちらの再描画でも)同じ判定・同じ内容が表示される＝同期される。
+    """
+    hits = room.get("ghost_log_hit")
+    if hits is not None and hits.get(stage) is None:
+        hits[stage] = (random.random() < 0.30)
+
+
+def submit_answer(code: str, role: str, stage: int, correct: bool,
+                  tamper_trap: bool = False) -> bool:
+    """正誤判定を記録する。戻り値: この送信で施設安定度が実際に減ったか。
+
+    要素B(通信改ざん)の配慮: tamper_trap=True は「誤答の内容が改ざん偽値どおり」
+    と呼び出し側が判定済みの印。Stage4でこの場合に限り、最初の1回だけ安定度も
+    misses も据え置く(改ざんが原因の誤答で True End 資格を奪わない)。
+    改ざんと無関係なただの誤答は従来どおり減点する。
+    """
     store = get_store()
+    penalized = False
     with store["lock"]:
         room = store["rooms"].get(code)
         if room is None:
-            return
+            return False
         if correct:
             room["solved"][stage][role] = True
             both = room["solved"][stage]["p1"] and room["solved"][stage]["p2"]
             if both and room["stage"] == stage:
                 room["stage"] = stage + 1
+                _roll_ghost_log(room, stage)
         else:
-            room["misses"] += 1
-            room["stability"] = max(0, 100 - 5 * room["misses"])
+            if stage == 4 and tamper_trap and not room.get("s4_tamper_grace_used"):
+                room["s4_tamper_grace_used"] = True
+            else:
+                room["misses"] += 1
+                room["stability"] = max(0, 100 - 5 * room["misses"])
+                penalized = True
+    return penalized
 
 
 def set_stamp(code: str, role: str, text: str):
@@ -281,6 +374,15 @@ def set_hidden_log(code: str):
         room = store["rooms"].get(code)
         if room:
             room["hidden_log"] = True
+
+
+def mark_red_woman_shown(code: str):
+    """要素C: 赤い女の目撃演出を「発火済み」にする(再表示防止・ルーム状態で同期)。"""
+    store = get_store()
+    with store["lock"]:
+        room = store["rooms"].get(code)
+        if room:
+            room["red_woman_shown"] = True
 
 
 def finalize_ending(code: str):
@@ -367,6 +469,24 @@ def build_puzzle(seed: int) -> dict:
     half = (len(hid) + 1) // 2
     s4_hid_p1, s4_hid_p2 = hid[:half], hid[half:]
 
+    # 要素B: 通信改ざん (Stage4限定)。
+    # 二人のうちどちらか一方の主要データを1つだけ偽の値に差し替える。
+    # 差し替えた行の末尾には必ずノイズ記号(▓)が付き、見分けられる(フェア設計)。
+    # 改ざんされていない側の画面には、アーカイブ残骸として「真正の値」が別ルートで
+    # 漏れて表示される＝答え自体(s4_answer)は誰かが必ず正しく知っている状態を保つ。
+    tamper_role = rng.choice(["p1", "p2"])
+    if tamper_role == "p1":
+        fake_code = rng.randint(10, 99)
+        while fake_code == code4:
+            fake_code = rng.randint(10, 99)
+        s4_tamper = {"role": "p1", "fake_code": fake_code}
+        # 偽値を信じて組み立てた場合の誤答。初回免除はこの解答のみ対象(True End保護)。
+        s4_tamper_answer = f"{name}{fake_code}"
+    else:
+        fake_name = rng.choice([n for n in names if n != name])
+        s4_tamper = {"role": "p2", "fake_name": fake_name}
+        s4_tamper_answer = f"{fake_name}{code4}"
+
     # --- Final : 統合 ---
     # パズルの解(=入力する文字列)は既存どおり「語頭+認証記号+コード」で解ける。
     # ただしこの3点は偶然ではなく、失踪した最終施錠者の『職員照合キー』そのもの。
@@ -383,6 +503,7 @@ def build_puzzle(seed: int) -> dict:
         "s4_front_code": code4, "s4_back_name": name, "s4_answer": s4_answer,
         "s4_name_roma": name_roma,
         "s4_hid_p1": s4_hid_p1, "s4_hid_p2": s4_hid_p2, "s4_hidword": hid,
+        "s4_tamper": s4_tamper, "s4_tamper_answer": s4_tamper_answer,
         "final_word": word, "final_letter": s3_answer, "final_code4": code4,
         "final_answer": final, "final_meaning": final_meaning, "final_sector": sector,
         "lock_name": name, "lock_name_roma": name_roma,
@@ -547,8 +668,49 @@ def radio_interlude(role: str, after_stage: int):
                     unsafe_allow_html=True)
 
 
+def ghost_transmission(room: dict, pz: dict, after_stage: int):
+    """要素A: 前任ペアのゴーストログ。無線会話の後、稀に混じるノイズ混じりの断片。
+
+    表示条件はルーム状態(ghost_log_hit)で確定済みなので、P1/P2どちらが見ても
+    同じ断片が出る(=同期)。ソロでも同じ経路で出る。
+    """
+    hits = room.get("ghost_log_hit") or {}
+    if not hits.get(after_stage):
+        return
+    lines = ghost_log_lines(after_stage, pz)
+    if not lines:
+        return
+    body = "".join(f"<div style='margin:0.3rem 0'>{ln}</div>" for ln in lines)
+    st.markdown(
+        f"<div class='pl-panel pl-ghost'>"
+        f"<div class='pl-ghost-head'>[ RECOVERED TRANSMISSION — 7年前 ]</div>"
+        f"{body}</div>", unsafe_allow_html=True)
+
+
+def maybe_show_red_woman(code: str, role: str, room: dict):
+    """要素C: 相方にしか見えない赤い女。2人プレイ限定・P2の画面にだけ一度。
+
+    ゲームプレイ(入力・正誤判定)には一切影響しない、純粋な演出。
+    発火は「発火済み」フラグでルーム状態に保存し、二度と出さない。
+    """
+    if room.get("solo"):
+        return  # ソロモードでは発火しない
+    if role != "p2":
+        return  # P1の画面には絶対に出さない
+    if room.get("red_woman_shown"):
+        return
+    if room.get("stage") != room.get("red_woman_stage"):
+        return
+    mark_red_woman_shown(code)
+    st.markdown(
+        "<div class='pl-redwoman'>……モニターの端。通路の奥に、"
+        "赤い服の人影。</div>", unsafe_allow_html=True)
+
+
 def answer_block(code: str, role: str, stage: int, expected: str, label: str,
-                 placeholder: str = ""):
+                 placeholder: str = "", tamper_answer: str = None):
+    # tamper_answer: 改ざん偽値を信じた場合に組み上がる誤答(Stage4のみ)。
+    # これと一致する誤答だけが初回免除の対象になる。
     room = room_snapshot(code)
     if room["solved"][stage][role]:
         if st.session_state.get("pl_solo"):
@@ -576,11 +738,17 @@ def answer_block(code: str, role: str, stage: int, expected: str, label: str,
         submitted = st.form_submit_button("▶ 送信", type="primary", use_container_width=True)
     if submitted:
         ok = norm(guess) == norm(expected)
-        submit_answer(code, role, stage, ok)
+        # 誤答が「改ざん偽値どおりの解答」かを、正誤判定と同じ正規化で判別する
+        tamper_trap = (not ok and tamper_answer is not None
+                       and norm(guess) == norm(tamper_answer))
+        penalized = submit_answer(code, role, stage, ok, tamper_trap=tamper_trap)
         if ok:
             st.toast("✅ 認証成功", icon="✅")
-        else:
+        elif penalized:
             st.toast("❌ 不正解 — 施設安定度が低下", icon="⚠️")
+        else:
+            # 要素B: 改ざん偽値に起因する初回誤答のみ、安定度を据え置く。
+            st.toast("❌ 不正解 — 通信改ざんの影響とみなし、安定度は据え置き", icon="🛡️")
         app_rerun()
     stamp_bar(code, role, f"ans{stage}")
 
@@ -667,23 +835,55 @@ def stage3(code, role, pz):
 def stage4(code, role, pz):
     st.subheader("STAGE 4 — 研究データ解析  ★★★★☆")
     st.caption("復元データが前半・後半に分断されている。両方を突き合わせないと意味をなさない。")
+
+    # 要素B: 通信改ざん — このステージに入った最初の描画で一度だけ警告する
+    # (ソロはP1/P2どちらの画面で最初に来ても、1セッションにつき1回だけ表示)。
+    warn_key = f"pl_s4_warned_{code}"
+    if not st.session_state.get(warn_key):
+        st.warning("⚠ 通信品質低下 — 一部データに改ざんの痕跡（▓）。"
+                   "行末にノイズ記号が付いた情報は信用しないこと。")
+        st.session_state[warn_key] = True
+
+    tamper = pz["s4_tamper"]
     if role == "p1":
+        if tamper["role"] == "p1":
+            code_html = (f"<b style='color:#ffd24d'>{tamper['fake_code']}</b> "
+                         f"<span style='color:#ff5c5c'>▓</span>")
+        else:
+            code_html = f"<b style='color:#ffd24d'>{pz['s4_front_code']}</b>"
+        mirror = ""
+        if tamper["role"] == "p2":
+            # 相手(P2)側が改ざんされている場合、こちらにアーカイブ残骸として正しい氏名が漏れる。
+            mirror = (f"<br><span style='opacity:0.75'>※アーカイブ残骸を検出 — 氏名断片"
+                      f" 『{pz['s4_back_name']}』（照合: 真正）</span>")
         st.markdown("**復元データ〔前半〕:**")
         st.markdown(
             f"<div class='pl-panel'>……事故当夜、最終施錠を行った人物の記録。<br>"
-            f"職員コードの<b>下2桁</b>は <b style='color:#ffd24d'>{pz['s4_front_code']}</b>。"
-            f"担当区画は——（以降欠損）</div>", unsafe_allow_html=True)
-        st.info("施錠者の『氏名』は後半（相手側）にある。氏名＋コードを統合せよ。")
+            f"職員コードの<b>下2桁</b>は {code_html}。"
+            f"担当区画は——（以降欠損）{mirror}</div>", unsafe_allow_html=True)
+        st.info("施錠者の『氏名』は後半（相手側）にある。氏名＋コードを統合せよ。"
+                "行末に ▓ が付いた数値は改ざんの疑いがある。")
     else:
+        if tamper["role"] == "p2":
+            name_html = (f"<b style='color:#7fd0ff'>『{tamper['fake_name']}』</b> "
+                         f"<span style='color:#ff5c5c'>▓</span>")
+        else:
+            name_html = f"<b style='color:#7fd0ff'>『{pz['s4_back_name']}』</b>"
+        mirror = ""
+        if tamper["role"] == "p1":
+            # 相手(P1)側が改ざんされている場合、こちらにアーカイブ残骸として正しい職員コードが漏れる。
+            mirror = (f"<br><span style='opacity:0.75'>※アーカイブ残骸を検出 — 職員コード"
+                      f" 『{pz['s4_front_code']}』（照合: 真正）</span>")
         st.markdown("**復元データ〔後半〕:**")
         st.markdown(
             f"<div class='pl-panel'>（前半欠損）——第7研究棟。<br>"
-            f"施錠者の氏名は <b style='color:#7fd0ff'>『{pz['s4_back_name']}』</b>。<br>"
-            f"以降、当該人物の出勤記録は存在しない……</div>", unsafe_allow_html=True)
-        st.info("『職員コード』は前半（相手側）にある。氏名＋コードを統合せよ。")
+            f"施錠者の氏名は {name_html}。<br>"
+            f"以降、当該人物の出勤記録は存在しない……{mirror}</div>", unsafe_allow_html=True)
+        st.info("『職員コード』は前半（相手側）にある。氏名＋コードを統合せよ。"
+                "行末に ▓ が付いた氏名は改ざんの疑いがある。")
 
     answer_block(code, role, 4, pz["s4_answer"], "氏名＋職員コードを入力",
-                 placeholder="例: 山田12")
+                 placeholder="例: 山田12", tamper_answer=pz["s4_tamper_answer"])
 
     # 隠しログ (任意 / True・Secret 条件)
     with st.expander("🔍 復元しきれなかった断片がある…"):
@@ -1014,6 +1214,10 @@ def main():
     pz = build_puzzle(room["seed"])
     # 直前ステージ突破後の無線会話を挟む（真相を小出しに）
     radio_interlude(role, room["stage"] - 1)
+    # 要素A: 無線の後、稀に前任ペアのゴーストログが混じる
+    ghost_transmission(room, pz, room["stage"] - 1)
+    # 要素C: 2人プレイ限定・中盤ステージでP2にだけ一度、赤い女の目撃演出
+    maybe_show_red_woman(code, role, room)
     STAGE_FUNCS[room["stage"]](code, role, pz)
 
 

@@ -14,6 +14,7 @@
   🔢 数列の記憶（隠しゲーム・コインで解放）
 """
 
+import html
 import random
 
 import streamlit as st
@@ -137,6 +138,57 @@ p, li, label, .stMarkdown { color: #c4d9e8 !important; }
 @keyframes arc-scroll {
     0%   { transform: translateX(0); }
     100% { transform: translateX(-100%); }
+}
+
+/* 🏆 TODAY'S RANKING（ロビーの小さなスコアボード） */
+.arc-board {
+    border: 1px solid rgba(255,225,77,0.35);
+    border-radius: 6px;
+    background: rgba(12,6,24,0.55);
+    box-shadow: inset 0 0 14px rgba(255,46,205,0.10);
+    padding: 0.4rem 0.7rem;
+    margin: 0.3rem 0 0.9rem 0;
+    font-family: 'Share Tech Mono', monospace;
+}
+.arc-board-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.22rem 0;
+    border-bottom: 1px dashed rgba(0,229,255,0.12);
+}
+.arc-board-row:last-child { border-bottom: none; }
+.arc-board-rank { width: 1.6rem; color: #ffe14d; font-weight: bold; text-align: right; }
+.arc-board-name { flex: 1; color: #c4d9e8; letter-spacing: 1px; }
+.arc-board-score { color: #5cf0ff; text-shadow: 0 0 6px rgba(0,229,255,0.4); }
+/* 自分の行は少し強調 */
+.arc-board-row--me { background: rgba(255,225,77,0.05); border-radius: 4px; }
+.arc-board-row--me .arc-board-name { color: #ffe14d; font-weight: bold; }
+/* 「404」の行：存在しないはずの客。わずかな赤みだけ添える（やりすぎない） */
+.arc-board-row--404 { background: rgba(255,96,96,0.07); border-radius: 4px; }
+.arc-board-row--404 .arc-board-name {
+    color: #ff8a8a;
+    text-shadow: 0 0 6px rgba(255,96,96,0.5);
+}
+.arc-board-score--glitch {
+    color: #ff6060;
+    text-shadow: 0 0 8px rgba(255,96,96,0.7);
+    animation: arc-glitch 1.6s steps(2, jump-none) infinite;
+}
+@keyframes arc-glitch {
+    0%, 100% { opacity: 1; transform: translateX(0); }
+    45%      { opacity: 0.75; transform: translateX(1px); }
+    50%      { opacity: 1; transform: translateX(-1px); }
+    55%      { opacity: 0.85; transform: translateX(0); }
+}
+/* 404行の下にだけ、ごく薄く一瞬の気配を残す（セッション中まれに1回） */
+.arc-board-whisper {
+    font-size: 0.7rem;
+    color: rgba(255,96,96,0.35);
+    letter-spacing: 1px;
+    text-align: right;
+    margin-top: -0.3rem;
+    padding-right: 0.3rem;
 }
 
 /* 研究端末の極小フッター（隅に擬装データの気配だけ） */
@@ -325,6 +377,99 @@ def reward_banner(amount):
         st.success(f"💴 +{amount} コインを獲得！")
 
 
+# --------------------------------------------------------------------------
+# 🏆 TODAY'S RANKING — ロビーの小さなスコアボード
+#   通常は架空の常連客（固定）＋プレイヤー本人（累計獲得コインをスコアとして反映）。
+#   NOXA進行度（ECHO / 404 のクリア状況を _noxa 経由で取得）に応じて、
+#   ランキングに存在しないはずのプレイヤー「404」が混ざり込む。
+#   表示専用の演出であり、コイン経済・実績・マスターの物語進行には一切触れない。
+# --------------------------------------------------------------------------
+RANKING_REGULARS = [
+    ("ハスラー健二", 620),
+    ("モモ", 540),
+    ("レトロ翁", 410),
+    ("シェリー", 305),
+    ("ナナシ", 150),
+]
+
+
+def _board_row(rank, name, score_text, *, is_player=False, is_404=False, glitch=False):
+    """スコアボード1行分のHTMLを組み立てる（表示専用）。"""
+    classes = ["arc-board-row"]
+    if is_player:
+        classes.append("arc-board-row--me")
+    if is_404:
+        classes.append("arc-board-row--404")
+    score_cls = "arc-board-score" + (" arc-board-score--glitch" if glitch else "")
+    return (
+        f'<div class="{" ".join(classes)}">'
+        f'<span class="arc-board-rank">{rank}</span>'
+        f'<span class="arc-board-name">{html.escape(str(name))}</span>'
+        f'<span class="{score_cls}">{html.escape(str(score_text))}</span>'
+        f'</div>'
+    )
+
+
+def _noxa_ranking_stage():
+    """404混入の段階を返す。
+
+      0: 混入なし（単体起動時は常にこれ）
+      1: ECHOクリア後 — 末尾に「404」が出現。スコアは "?????"。
+      2: 404（アーグ作品）クリア後 — 「404」が1位に成り代わる。表示のみのグリッチ。
+
+    _noxa の import 失敗・例外はすべて安全側（混入なし）に倒す。
+    """
+    if not _noxa:
+        return 0
+    try:
+        if _noxa.is_cleared("arg"):     # 「404 User Not Found」クリア後
+            return 2
+        if _noxa.is_cleared("echo"):    # 「Project ECHO」クリア後
+            return 1
+    except Exception:
+        pass
+    return 0
+
+
+def _rare_404_whisper():
+    """404が1位の行に、まれに（セッション中1回だけ判定・以降は固定）薄い一言を添えるか。"""
+    if "arc_404_whisper" not in st.session_state:
+        st.session_state.arc_404_whisper = random.random() < 0.12
+    return st.session_state.arc_404_whisper
+
+
+def render_ranking():
+    """ロビーの小さなスコアボードを描画する。"""
+    st.subheader("🏆 TODAY'S RANKING")
+
+    rows = [{"name": n, "score": s} for n, s in RANKING_REGULARS]
+    rows.append({"name": st.session_state.player_name, "score": st.session_state.coins_earned})
+    rows.sort(key=lambda r: r["score"], reverse=True)
+
+    stage = _noxa_ranking_stage()
+    parts = ['<div class="arc-board">']
+
+    if stage == 2:
+        # 404が1位に成り代わる。スコア表示はグリッチし、行にわずかな赤みが差す。
+        parts.append(_board_row(1, "404", "▓▓▓▓4 0 4▓▓", is_404=True, glitch=True))
+        for i, r in enumerate(rows, start=2):
+            is_me = r["name"] == st.session_state.player_name
+            parts.append(_board_row(i, r["name"], f"{r['score']:,}", is_player=is_me))
+        if _rare_404_whisper():
+            parts.append('<div class="arc-board-whisper">she is watching.</div>')
+    else:
+        for i, r in enumerate(rows, start=1):
+            is_me = r["name"] == st.session_state.player_name
+            parts.append(_board_row(i, r["name"], f"{r['score']:,}", is_player=is_me))
+        if stage == 1:
+            # 末尾に見慣れないプレイヤーが1人だけ増えている。
+            parts.append(_board_row(len(rows) + 1, "404", "?????", is_404=True))
+
+    parts.append("</div>")
+    st.markdown("".join(parts), unsafe_allow_html=True)
+    st.caption("常連客の記録 ＋ あなたのスコア（累計獲得コイン基準）")
+
+
 # ==========================================================================
 # ホーム画面
 # ==========================================================================
@@ -364,6 +509,9 @@ def page_home():
 
     prog, into, remain = level_progress()
     st.progress(prog, text=f"次のレベルまで あと {remain} コイン（{into}/{LEVEL_STEP}）")
+
+    st.markdown("---")
+    render_ranking()
 
     st.markdown("---")
     st.subheader("🏅 実績")

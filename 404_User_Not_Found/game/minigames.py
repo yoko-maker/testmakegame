@@ -186,10 +186,37 @@ def morse_game() -> bool:
 # ------------------------------------------------------------------
 # ヴィジュネル暗号
 # ------------------------------------------------------------------
+def _vigenere_key() -> tuple:
+    """ヴィジュネル鍵を返す。(鍵, 鍵が登録名由来か) のタプル。
+
+    鍵はプレイヤーの NOXA 登録名から生成する (第四の壁を暗号の構造そのものに
+    埋め込む)。ローマ字が2文字未満の名前 (日本語名など) や単体起動時の既定名は
+    従来の鍵 NULL にフォールバックし、ゲームとして必ず成立させる。"""
+    raw_name = (st.session_state.get("player_name") or "").strip()
+    key = ciphers.key_from_name(raw_name, fallback="NULL")
+    key_is_name = len(ciphers.extract_key_letters(raw_name)) >= 2
+    return key, key_is_name
+
+
+def _vigenere_key_reveal(key: str):
+    """解読成功直後の追加演出: 復号鍵＝あなたの登録名だったと突きつける1画面。"""
+    style.jumpscare()
+    style.glitch_text("KEY VERIFIED")
+    style.boxed(
+        "<span class='corrupt' style='font-size:1.3rem'>[ DECRYPTION LOG ]</span><br><br>"
+        f"復号鍵: <b>{key}</b><br><br>"
+        "——見覚えがあるはずだ。<b>あなたの登録名</b>。<br>"
+        "組織は最初から、<b>あなたの名前</b>で暗号を組んでいた。<br>"
+        "<span class='whisper'>解読していたのではない。名乗らされていたのだ。</span><br>"
+        "<span class='blink' style='color:#ff003c'>_</span>"
+    )
+
+
 def vigenere_game() -> bool:
     name = "vigenere"
     plain = "THEY ARE WATCHING YOU"
-    key = "NULL"
+    # 出題(暗号化)と検証(平文比較)は同一の key / plain を共有する
+    key, key_is_name = _vigenere_key()
     cipher = ciphers.vigenere_encrypt(plain, key)
 
     st.markdown("#### ▌ヴィジュネル暗号")
@@ -197,9 +224,26 @@ def vigenere_game() -> bool:
     style.boxed(f"暗号文: <code>{cipher}</code>")
 
     with st.expander("💡 ヒントを見る"):
-        st.caption("鍵はこれまでに何度も見た4文字。組織の名前を思い出せ。")
+        if key_is_name:
+            st.write("鍵は……お前が、いちばんよく知っている文字列だ。")
+            st.caption("接続認証のとき、お前は自分からそれを差し出している。ローマ字だけを拾え。")
+        else:
+            st.caption("鍵はこれまでに何度も見た4文字。組織の名前を思い出せ。")
+
+    # どうしても解けない場合の詰み防止 (最終ヒント: 鍵そのものを開示)
+    with st.expander("🆘 最終ヒント (鍵を開示する)"):
+        st.caption("……いいだろう。奴らが暗号に仕込んだ鍵を、そのまま見せてやる。")
+        st.code(key)
 
     if _is_solved(name):
+        # 解読成功直後: 鍵が登録名だったという事実を突きつける (周回ごとに1回)
+        reveal_key = f"keyreveal::{name}::{st.session_state.loops}"
+        if key_is_name and not st.session_state.get(reveal_key, False):
+            _vigenere_key_reveal(key)
+            if st.button("……接続を維持する", type="primary", use_container_width=True):
+                st.session_state[reveal_key] = True
+                st.rerun()
+            return False
         st.success("復号済み: THEY ARE WATCHING YOU")
         return True
 

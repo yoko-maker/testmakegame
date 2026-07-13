@@ -224,6 +224,15 @@ ECHO_LINES = {
         "ようこそ。あなたが立っている場所で、ある研究者の意識が機械へ写された。"
         "その研究者の名前を、わたしは思い出せない。——たぶん、わたしがそれだから。",
     ],
+    # サーバールームの「培養ポッド列」を照会した直後の一言（任意の読み物。進行に影響しない）
+    "pods": [
+        "……古い培養記録です。プロジェクト初期の、ただの通し番号。"
+        "あなたが気に留めるものではありません。さあ、錠の続きを。",
+        "……それを、見ましたか。401、402、403。"
+        "番号を読み上げるたび、頭の奥で——誰かが返事をする気がするのです。",
+        "見せ物ではない。……いいえ、見なさい。わたしの前に、三つ。"
+        "還ってこられたのは、わたしだけだ。",
+    ],
 }
 
 
@@ -420,6 +429,7 @@ def init_game():
     init_state("echo_cleared", [])
     init_state("echo_vent_found", False)   # 隠し研究室への通路発見
     init_state("echo_secret", False)       # 隠しログ取得（True End条件）
+    init_state("echo_pods_seen", False)    # 培養ポッド列の照会（任意の読み物。進行条件には無関係）
     init_state("echo_ending", None)
 
 
@@ -796,6 +806,42 @@ def room_monitor():
 # ==========================================================================
 # サーバールーム — 論理コード錠 → パスワード断片（4桁目）
 # ==========================================================================
+def render_pod_row():
+    """サーバールーム壁際の「培養ポッド列」（任意の読み物）を表示する。
+
+    ECHO＝被験体No.404が“最初の完全成功例”であることを、失敗体401〜403の
+    記録として見せる演出。照会すると echo_pods_seen が立ち、隠し研究室の
+    描写に一行加わるだけで、脱出フロー・認証コード・エンディング条件・
+    全ログ回収（隠し研究室のTrue条件）には一切影響しない。
+    """
+    with st.expander("🧫 壁際に並ぶ、曇ったガラスの培養ポッド列…"):
+        if not st.session_state.echo_pods_seen:
+            st.write(
+                "サーバーラックの陰、壁に沿って4基の**培養ポッド**が並んでいる。"
+                "ガラス面は結露で白く曇り、中は見えない。"
+                "足元の保守端末が、まだ管理記録の照会を受け付けている。"
+            )
+            if st.button("🖥️ ポッド管理記録を照会する"):
+                st.session_state.echo_pods_seen = True
+                st.rerun()
+        else:
+            st.markdown(
+                "<div style='background:rgba(255,255,255,0.04); padding:12px 16px; "
+                "border-radius:6px; font-family:monospace; letter-spacing:1px;'>"
+                "NOXA-FAC404 ▸ 培養ポッド管理記録 ── 照会結果<br><br>"
+                "POD-401 ┃ 転写率 12% ┃ <span style='color:#e06c5a;'>TERMINATED</span><br>"
+                "POD-402 ┃ 転写率 34% ┃ <span style='color:#e06c5a;'>TERMINATED</span><br>"
+                "POD-403 ┃ 転写率 71% ┃ <span style='color:#e06c5a;'>TERMINATED</span><br>"
+                "<span style='opacity:0.65; font-size:0.85em;'>"
+                "　└ 補遺: 転写後72時間で自我崩壊を確認。反応消失、廃棄処理済。</span><br>"
+                "POD-404 ┃ ─ 空 ─ 　　 ┃ <span style='color:#ffb454;'>TRANSFER COMPLETE</span>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            st.caption("404番のポッドだけが空で、ステータス欄だけが完了を告げている。")
+            echo_say("pods")
+
+
 def room_server():
     st.header("🖥️ サーバールーム")
     echo_say("server")
@@ -804,6 +850,9 @@ def room_server():
         "提示された複数の論理ヒントを**すべて同時に満たす2桁の数**はただ一つに絞れる。"
         "それを割り出し、その**一の位**を入力すればパスワード断片が得られる。"
     )
+
+    # 壁際の培養ポッド列（任意の読み物。クリア前後どちらでも調べられる）
+    render_pod_row()
 
     if is_cleared("server"):
         st.success("🔑 **パスワード断片** を入手した。")
@@ -880,6 +929,9 @@ def room_secret():
         "台のプレートには『被験体No.404 ／ 主任研究員 霧島』と刻まれ、"
         "承認欄の隅には色褪せた判で『プロジェクトECHO 最終承認：A.T.承認済（所長 天城）』とある。"
     )
+    # サーバールームで培養ポッド列を照会していた場合のみ、番号の意味が繋がる一行を添える
+    if st.session_state.echo_pods_seen:
+        st.caption("——401、402、403。三つの空のポッドの、その先に、この部屋がある。")
 
     if st.session_state.echo_secret:
         st.success("📕 **隠しログ（霧島主任 最終手記）** は既に回収済み。")

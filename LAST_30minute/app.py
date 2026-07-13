@@ -568,6 +568,36 @@ def setup_seq():
     st.session_state.mg_seq_msg = ""
 
 
+def render_orbit_credit():
+    """復旧成功直後に自動表示する、軌道予測モデルのデータ属性照会。
+
+    迎撃を支えるモデルの作成者は、失踪したはずのECHO計画主任・霧島 玲。
+    「失踪後もデータが更新され続けている」違和感だけを一行残す
+    （誰が更新したのかは語らない——答えはECHO=404の側にある）。
+    現場の主任研究員・霧島は同姓の別人として反応し、既存設定と矛盾させない。
+    表示のみで、タイマー・迎撃成功率・エンディング判定・電力配分には一切影響しない。
+    """
+    st.markdown(
+        "<div style='border:1px solid #7a1f17; border-left:3px solid #ff3b30; "
+        "border-radius:3px; padding:14px 18px; margin:10px 0; "
+        "background:rgba(24,8,8,0.75); font-family:monospace; "
+        "color:#ff6a5e; letter-spacing:1px; line-height:1.9; "
+        "box-shadow:inset 0 0 12px rgba(255,40,40,0.10);'>"
+        "▌ データ属性照会 ── NOXA中央アーカイブ<br>"
+        "&nbsp;&nbsp;軌道予測モデル: <b>ORB-KIRI/7</b><br>"
+        "&nbsp;&nbsp;作成者: 霧島 玲（ECHO計画・主任研究員）<br>"
+        "&nbsp;&nbsp;最終更新: <b>本日 04:12</b> ── 記録上、作成者は既に失踪している"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.info(
+        "**🔬 主任研究員・霧島**\n\n"
+        "「霧島 玲……失踪したECHO計画の主任か。私とは同じ姓というだけで、面識すらない。"
+        "だが、この更新日時は──今朝だぞ。誰が……いや、詮索は後だ。"
+        "このモデルが動くなら、迎撃に間に合う」"
+    )
+
+
 def view_quiz():
     render_hud()
     st.markdown("---")
@@ -581,6 +611,8 @@ def view_quiz():
 
     if st.session_state.lz_analysis:
         st.success("✅ 隕石解析は完了済み。")
+        # 復旧成功の結果画面に、軌道予測モデルのデータ属性を追加クリックなしで差し込む。
+        render_orbit_credit()
         if st.button("🛰️ 司令室に戻る"):
             goto("hub")
         return

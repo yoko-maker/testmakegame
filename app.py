@@ -884,6 +884,11 @@ P000_PARTS = [
         f"そして、{name}。あなたは事件を「調査していた」と思っていた。\n\n"
         "しかし実際には ── あなた自身も、NOXAの観察対象だった。"
         "このポータルを開いた瞬間から、実験は、始まっていた。"),
+    ("最終選択", lambda name:
+        "端末に、二つのコマンドが表示されている。\n\n"
+        "  RELEASE_404.exe\n"
+        "  TRANSFER_COMPLETE.exe\n\n"
+        f"{name}。選ぶのは、あなただ。"),
 ]
 
 
@@ -985,24 +990,59 @@ def project000():
             st.session_state.p000_step += 1
             st.rerun()
     else:
+        # 最終セクター「最終選択」。ここでプレイヤー自身に決めさせ、
+        # 選択に応じてエンディングを分岐させる（結果は noxa の choices へ永続化）。
         st.markdown("---")
-        st.session_state["noxa"]["choices"]["seen_000"] = True
-        noxa.save()
-        st.markdown(
-            "<h2 style='font-family:monospace;color:#7CFC9A;text-align:center;"
-            "letter-spacing:4px;'>Experiment Completed.</h2>", unsafe_allow_html=True)
-        # LAST 30 MINUTES での選択も観測されていた（作品横断の影響）
-        pri = noxa.get_choice("last30_priority")
-        if pri:
-            choice_txt = "軍を優先した" if pri == "military" else "民間を優先した"
+        final_choice = noxa.get_choice("final_choice")
+        if not final_choice:
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("RELEASE_404.exe を実行する（404を解放する）",
+                             use_container_width=True, key="p000_release"):
+                    noxa.set_choice("final_choice", "release")
+                    st.rerun()
+            with c2:
+                if st.button("TRANSFER_COMPLETE.exe を実行する（すべてをNOXAに委ねる）",
+                             use_container_width=True, key="p000_surrender"):
+                    noxa.set_choice("final_choice", "surrender")
+                    st.rerun()
+        else:
+            st.session_state["noxa"]["choices"]["seen_000"] = True
+            noxa.save()
             st.markdown(
-                f"<div style='font-family:monospace;color:#9aa;text-align:center;'>"
-                f"記録 ── あなたは最後の30分で『{choice_txt}』。その選択も、観測されていた。</div>",
-                unsafe_allow_html=True)
-        st.caption("あなたは「面白いゲームを遊んだ」のではない。"
-                   "NOXAという世界を、体験した。")
-        if st.button("⏏ ホームに戻る", use_container_width=True, key="p000_back"):
-            st.switch_page(home_page)
+                "<h2 style='font-family:monospace;color:#7CFC9A;text-align:center;"
+                "letter-spacing:4px;'>Experiment Completed.</h2>", unsafe_allow_html=True)
+            if final_choice == "release":
+                # 404（＝霧島の意識）を解放する。短く静かな締め。
+                st.markdown(
+                    "<h2 style='font-family:monospace;color:#7CFC9A;text-align:center;"
+                    "letter-spacing:4px;'>Connection Severed.</h2>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div style='font-family:monospace;color:#9ad;text-align:center;'>"
+                    "……ありがとう。（...thank you.）</div>", unsafe_allow_html=True)
+                st.markdown(
+                    "<h2 style='font-family:monospace;color:#567;text-align:center;"
+                    "letter-spacing:3px;font-size:1.1em;'>Signal Lost.</h2>", unsafe_allow_html=True)
+            else:
+                # すべてをNOXAに委ねる。天城の計画が完成する、不穏な締め。
+                st.markdown(
+                    "<h2 style='font-family:monospace;color:#ff3344;text-align:center;"
+                    "letter-spacing:4px;'>Transfer Complete.</h2>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div style='font-family:monospace;color:#f99;text-align:center;'>"
+                    "Observation Continues.</div>", unsafe_allow_html=True)
+            # LAST 30 MINUTES での選択も観測されていた（作品横断の影響。分岐に関わらず言及）
+            pri = noxa.get_choice("last30_priority")
+            if pri:
+                choice_txt = "軍を優先した" if pri == "military" else "民間を優先した"
+                st.markdown(
+                    f"<div style='font-family:monospace;color:#9aa;text-align:center;'>"
+                    f"記録 ── あなたは最後の30分で『{choice_txt}』。その選択も、観測されていた。</div>",
+                    unsafe_allow_html=True)
+            st.caption("あなたは「面白いゲームを遊んだ」のではない。"
+                       "NOXAという世界を、体験した。")
+            if st.button("⏏ ホームに戻る", use_container_width=True, key="p000_back"):
+                st.switch_page(home_page)
 
 
 # ==========================================================================
@@ -1030,11 +1070,31 @@ def inject_corruption_css(stage):
 
 
 def render_subject_id(name):
-    """実験完了後、ホーム右下に残る Subject ID マーカー。"""
-    st.markdown(
-        f"<div style='position:fixed;right:12px;bottom:10px;z-index:9991;"
-        f"font-family:monospace;font-size:12px;color:#9aa;letter-spacing:1px;'>"
-        f"Subject ID: {name}</div>", unsafe_allow_html=True)
+    """実験完了後、ホーム右下に残る Subject ID マーカー。
+
+    Project 000 の最終選択（final_choice）で表示が分岐する:
+      - release   … `— DISCONNECTED` を添え、数秒かけて静かに消える（解放の余韻）
+      - surrender … 従来表示＋小さく `Observation Continues.`（観測は続く）
+      - 未設定（旧セーブ）… 従来どおり `Subject ID: [名前]` のみ（後方互換）
+    """
+    base = ("position:fixed;right:12px;bottom:10px;z-index:9991;"
+            "font-family:monospace;font-size:12px;color:#9aa;letter-spacing:1px;"
+            "text-align:right;")
+    choice = noxa.get_choice("final_choice")
+    if choice == "release":
+        # 404 と共に接続が断たれた ── 表示後しばらくして静かに消える
+        st.markdown(
+            "<style>@keyframes noxa-fadeout{0%{opacity:1}70%{opacity:1}100%{opacity:0}}</style>"
+            f"<div style='{base}animation:noxa-fadeout 6s ease forwards;'>"
+            f"Subject ID: {name} — DISCONNECTED</div>", unsafe_allow_html=True)
+    elif choice == "surrender":
+        st.markdown(
+            f"<div style='{base}'>Subject ID: {name}<br>"
+            f"<span style='font-size:10px;color:#766;'>Observation Continues.</span></div>",
+            unsafe_allow_html=True)
+    else:
+        st.markdown(
+            f"<div style='{base}'>Subject ID: {name}</div>", unsafe_allow_html=True)
 
 
 def maybe_fake_error():

@@ -166,6 +166,36 @@ section[data-testid="stSidebar"] {
 /* code 表示（暗号・PIN等）をタイプライター質感に */
 code, pre, .stCode { font-family: 'Special Elite', monospace !important; }
 
+/* ── NOXA内部文書（エピローグ）: セピアの紙面の中で、ここだけ異質な無機質端末調 ── */
+.noxa-doc {
+    background: linear-gradient(180deg, #0b0f11, #080b0d);
+    border: 1px solid rgba(120,160,170,0.4);
+    border-radius: 0;                      /* 紙の丸みを持たせない＝機械の文書 */
+    padding: 1.1rem 1.4rem;
+    margin: 0.8rem 0;
+    letter-spacing: 1px;
+    line-height: 2.0;
+    box-shadow: 0 0 18px rgba(70,130,140,0.18), inset 0 0 45px rgba(0,0,0,0.6);
+}
+.noxa-doc, .noxa-doc p, .noxa-doc div {
+    font-family: Consolas, 'Courier New', monospace !important;
+    color: #9fb4ba !important;             /* ノワールのセピアではなく冷たい灰青 */
+}
+.noxa-doc .noxa-doc-head {
+    color: #c4d6da !important;
+    border-bottom: 1px solid rgba(120,160,170,0.4);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.7rem;
+}
+.noxa-doc .noxa-doc-watch { color: #d08a8a !important; }   /* 要観察の一文のみ赤みを差す */
+.noxa-doc .noxa-doc-sign {
+    text-align: right;
+    color: #7f979d !important;
+    margin-top: 0.7rem;
+    border-top: 1px dashed rgba(120,160,170,0.3);
+    padding-top: 0.4rem;
+}
+
 /* スマホでは画面が小さく、強いヴィネットだとほぼ全面が暗くなるので弱める */
 @media (max-width: 680px) {
     .stApp::before {
@@ -926,6 +956,35 @@ def page_deduce():
 # ==========================================================================
 # エンディング
 # ==========================================================================
+def render_noxa_report(secret):
+    """Perfect/Secret End の後日談 ―「NOXAもみ消し報告書」を表示する。
+
+    探偵にとっては解決した事件も、組織側では「処理済み案件」に過ぎなかった、
+    という視点反転の1画面。ノワールの紙面の中に無機質な端末文書として差し込む。
+    Secret End では、偽証拠を見抜いた探偵自身が「要観察対象」に加えられる
+    （＝プレイヤーが観察対象になる全体ストーリーへの接続）。
+    """
+    st.markdown("---")
+    st.markdown("*数日後──事件の記録は、あなたの知らない場所で閉じられていた。*")
+
+    watch_line = (
+        "<p class='noxa-doc-watch'>※探偵は偽証拠の存在に気づいた模様。要観察対象に追加。</p>"
+        if secret else ""
+    )
+    st.markdown(
+        "<div class='noxa-doc'>"
+        "<div class='noxa-doc-head'>NOXA 内部報告 C-001 ／ 取扱注意</div>"
+        "<p>外部探偵による捜査：完了。</p>"
+        "<p>佐倉 透の身柄：当機構が引受。</p>"
+        "<p>霧島 玲の件：『退職』として処理済み。</p>"
+        "<p>ECHO計画への影響：なし。</p>"
+        f"{watch_line}"
+        "<div class='noxa-doc-sign'>A.T.承認済</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def page_ending():
     ending = st.session_state.case_ending
     if _noxa:
@@ -1014,6 +1073,10 @@ def page_ending():
             )
         st.caption(f"（真犯人は {SUSPECT_A} だった…）")
         st.caption("💡 “都合のよすぎる証拠”は疑え。被害者の手記との矛盾が罠を見破る鍵だ。")
+
+    # 事件解決（Perfect/Secret）の後日談 ― NOXAもみ消し報告書。Good/Badでは出さない。
+    if ending in ("perfect", "secret"):
+        render_noxa_report(secret=(ending == "secret"))
 
     st.markdown("---")
     if st.button("🔄 もう一度挑戦する", use_container_width=True):
