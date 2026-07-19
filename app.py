@@ -215,6 +215,9 @@ _PORTAL_FX_CSS = """
   font-family: monospace; font-size: 0.72rem; color: #7a9; letter-spacing: 1px; text-align: center;
   background: rgba(4,8,10,0.85); border-top: 1px solid rgba(80,200,160,0.25); padding: 3px 8px;
 }
+.noxa-credit {
+  display: block; margin-top: 1px; color: #567; font-size: 0.64rem; letter-spacing: 0.5px;
+}
 
 /* B. 常時監視インジケータ（画面隅で点滅する ●REC / 👁 MONITORING） */
 .noxa-rec {
@@ -331,6 +334,13 @@ def render_name_gate():
             noxa.save()
             st.rerun()
     st.caption("ⓘ これはゲームポータルです。……少なくとも、そう見えます。")
+    st.markdown(
+        "<div style='text-align:center;margin-top:22px;font-family:monospace;"
+        "font-size:0.68rem;color:#567;letter-spacing:0.5px;'>"
+        f"access {noxa.site_visits():,} ｜ made by Sogo Yokokawa "
+        "(Tokyo University of Technology)</div>",
+        unsafe_allow_html=True,
+    )
 
 
 # ==========================================================================
@@ -641,9 +651,14 @@ def render_portal_footer():
     name = noxa.state().get("player", "guest")
     now = jst_now().strftime("%H:%M")
     cc = noxa.clear_count()
+    visits = st.session_state.get("_site_visits") or noxa.site_visits()
     st.markdown(
-        f"<div class='noxa-footer'>NOXA SYS v2.3.4 ｜ MONITORING ｜ Subject: {name} ｜ "
-        f"cleared {cc}/{len(noxa.GAME_KEYS)} ｜ {now}</div>", unsafe_allow_html=True)
+        "<div class='noxa-footer'>"
+        f"NOXA SYS v2.3.4 ｜ MONITORING ｜ Subject: {name} ｜ "
+        f"cleared {cc}/{len(noxa.GAME_KEYS)} ｜ access {visits:,} ｜ {now}"
+        "<span class='noxa-credit'>made by Sogo Yokokawa "
+        "(Tokyo University of Technology)</span>"
+        "</div>", unsafe_allow_html=True)
 
 
 _SYS_TICKER = ["archive synced", "memory index nominal", "subject observed",
@@ -1439,6 +1454,11 @@ if not _s.get("player"):
 if not st.session_state.get("obs_logged"):
     st.session_state["obs_logged"] = True
     noxa.record_login()
+
+# サイト全体のアクセス数: 1セッションにつき1回だけ加算し、この回の値を控えておく
+if not st.session_state.get("_visit_counted"):
+    st.session_state["_visit_counted"] = True
+    st.session_state["_site_visits"] = noxa.record_site_visit()
 
 _target = getattr(nav, "url_path", "")
 _is_home = _target not in noxa.GAME_KEYS and _target not in ("void", "project000", "chat404")

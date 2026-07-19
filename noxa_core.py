@@ -491,6 +491,81 @@ def render_intrusion(game_key):
 # --------------------------------------------------------------------------
 # 永続化（プレイヤー名キーのJSON）
 # --------------------------------------------------------------------------
+# --- サイト全体のアクセス数（プレイヤー個別セーブとは別の共有カウンタ）---
+#
+# 一般公開でも再デプロイ・再起動で消えないよう、累計値は「登録不要の外部カウンター
+# API（counterapi.dev v1）」に持たせる。URLを知っていれば誰でも読める公開カウンタで、
+# ゲームの通算アクセス数という用途には十分。
+#
+# 外部APIが落ちている/ネットワークが無い場合に備え、ローカルファイル
+# (noxa_saves/_site_stats.json) を「直近値のキャッシュ兼フォールバック」として併用する。
+# ファイル名の先頭を "_" にしてプレイヤー名セーブと衝突しないようにしている。
+SITE_STATS_PATH = os.path.join(SAVE_DIR, "_site_stats.json")
+
+# 外部カウンタの識別子。他サイトと衝突しない一意な名前にしてある。
+SITE_COUNTER_NS = "noxa-portal-yokokawa"
+SITE_COUNTER_KEY = "site-visits"
+_COUNTER_BASE = "https://api.counterapi.dev/v1"
+
+
+def _counter_call(path, timeout=4.0):
+    """外部カウンタAPIを叩いて count(int) を返す。失敗時は例外を送出。"""
+    import urllib.request
+
+    url = "{}/{}/{}{}".format(_COUNTER_BASE, SITE_COUNTER_NS, SITE_COUNTER_KEY, path)
+    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (固定URL)
+        data = json.loads(resp.read().decode("utf-8"))
+    return int(data["count"])
+
+
+def _local_visits():
+    try:
+        with open(SITE_STATS_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return int(data.get("visits", 0))
+    except Exception:
+        pass
+    return 0
+
+
+def _write_local_visits(n):
+    """直近のアクセス数をローカルにキャッシュ（フォールバック用）。"""
+    try:
+        os.makedirs(SAVE_DIR, exist_ok=True)
+        with open(SITE_STATS_PATH, "w", encoding="utf-8") as f:
+            json.dump({"visits": int(n)}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def site_visits():
+    """これまでの累計アクセス数を返す（読むだけ・増やさない）。
+    外部カウンタを優先し、取得できなければローカルのキャッシュ値を返す。
+    """
+    try:
+        n = _counter_call("/")
+        _write_local_visits(n)
+        return n
+    except Exception:
+        return _local_visits()
+
+
+def record_site_visit():
+    """サイト全体のアクセス数を1増やして新しい値を返す。
+    セッション（ブラウザ接続）につき1回だけ呼ぶこと。
+    外部カウンタが使えない時はローカルファイルで加算してしのぐ。
+    """
+    try:
+        n = _counter_call("/up")
+        _write_local_visits(n)
+        return n
+    except Exception:
+        n = _local_visits() + 1
+        _write_local_visits(n)
+        return n
+
+
 def _safe_name(name):
     # 英数字・ひらがな・カタカナ・漢字・アンダースコア・ハイフン・空白のみ許可
     s = re.sub(r"[^0-9A-Za-z぀-ゟ゠-ヿ一-鿿_\- ]", "_",
