@@ -216,7 +216,7 @@ _PORTAL_FX_CSS = """
   background: rgba(4,8,10,0.85); border-top: 1px solid rgba(80,200,160,0.25); padding: 3px 8px;
 }
 .noxa-credit {
-  display: block; margin-top: 1px; color: #567; font-size: 0.64rem; letter-spacing: 0.5px;
+  display: block; margin-top: 1px; color: #7a9; font-size: 0.64rem; letter-spacing: 0.5px;
 }
 
 /* B. 常時監視インジケータ（画面隅で点滅する ●REC / 👁 MONITORING） */
@@ -334,9 +334,9 @@ def render_name_gate():
             noxa.save()
             st.rerun()
     st.caption("ⓘ これはゲームポータルです。……少なくとも、そう見えます。")
-    st.markdown(
-        "<div style='text-align:center;margin-top:22px;font-family:monospace;"
-        "font-size:0.68rem;color:#567;letter-spacing:0.5px;'>"
+    st.caption(
+        "<div style='text-align:center;margin-top:18px;font-family:monospace;"
+        "letter-spacing:0.5px;'>"
         f"access {noxa.site_visits():,} ｜ made by Sogo Yokokawa "
         "(Tokyo University of Technology)</div>",
         unsafe_allow_html=True,
