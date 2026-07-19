@@ -513,7 +513,11 @@ def _counter_call(path, timeout=4.0):
     import urllib.request
 
     url = "{}/{}/{}{}".format(_COUNTER_BASE, SITE_COUNTER_NS, SITE_COUNTER_KEY, path)
-    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (固定URL)
+    # counterapi.dev は Cloudflare 配下で、既定の "Python-urllib/x.y" UA を
+    # 403(error 1010) で弾く。ブラウザ風 UA を付けて回避する。
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0 (NOXA-Portal)"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (固定URL)
         data = json.loads(resp.read().decode("utf-8"))
     return int(data["count"])
 
